@@ -57,6 +57,12 @@ Actions are **on by default**: the console exists to do things, and every action
 is allowlisted server-side and bound to localhost. The full environment table,
 safety model, and a how-to for every screen live in the **[User Guide](USER_GUIDE.md)**.
 
+## Contributing
+
+Architecture, conventions, and how to extend each part (screens, alerts, settings,
+third-party apps, license gates) are in **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+PRs welcome against `main`.
+
 ## License
 
 The Console's code is **MIT-licensed** (see [LICENSE](LICENSE)): use, fork, modify,
