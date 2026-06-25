@@ -1,0 +1,22 @@
+{
+  "savings": {
+    "tokens_saved_30d": 4120000,
+    "usd_saved_30d": 61.8,
+    "tokens_saved_total": 76854041,
+    "calls": 1843,
+    "tool_breakdown": [
+      { "tool": "search_symbols", "tokens": 1880000, "calls": 612 },
+      { "tool": "get_symbol_source", "tokens": 990000, "calls": 421 },
+      { "tool": "get_file_outline", "tokens": 612000, "calls": 388 },
+      { "tool": "get_context_bundle", "tokens": 421000, "calls": 201 },
+      { "tool": "search_text", "tokens": 217000, "calls": 221 }
+    ],
+    "series": [
+      { "date": "2026-05-09", "tokens_saved": 121000, "usd": 1.8 },
+      { "date": "2026-05-16", "tokens_saved": 940000, "usd": 14.1 },
+      { "date": "2026-05-23", "tokens_saved": 1102000, "usd": 16.5 },
+      { "date": "2026-05-30", "tokens_saved": 988000, "usd": 14.8 },
+      { "date": "2026-06-06", "tokens_saved": 969000, "usd": 14.6 }
+    ]
+  }
+}

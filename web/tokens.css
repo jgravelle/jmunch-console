@@ -1,0 +1,103 @@
+/* jMunch Console — design tokens.
+   Dark is the default; light is opt-in via <html data-theme="light">.
+   All themeable values are CSS custom properties; semantic roles only. */
+
+:root {
+  /* surfaces */
+  --bg: #0d1117;
+  --surface: #151b23;
+  --surface-raised: #1c232d;
+  --border: #2a323d;
+  --border-strong: #3a4452;
+
+  /* text */
+  --text: #e6edf3;
+  --text-muted: #8b97a6;
+  --text-faint: #5e687a;
+
+  /* brand / accent */
+  --accent: #4cc2a8;            /* munch teal-green */
+  --accent-hover: #5fd6bb;
+  --accent-contrast: #06241d;
+
+  /* status — mapped to index freshness states */
+  --success: #3fb950;           /* fresh */
+  --success-bg: #11271a;
+  --warning: #d6a020;           /* edited_uncommitted */
+  --warning-bg: #2a2410;
+  --danger: #f06d63;            /* stale_index / destructive */
+  --danger-bg: #2c1614;
+  --info: #58a6ff;
+  --info-bg: #11233f;
+
+  /* chart palette */
+  --chart-1: #4cc2a8;
+  --chart-2: #58a6ff;
+  --chart-3: #d6a020;
+  --chart-4: #bc8cff;
+  --chart-5: #f06d63;
+  --chart-6: #56d4dd;
+
+  /* type */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 16px;
+  --fs-xl: 22px;
+  --fs-2xl: 32px;
+  --lh: 1.5;
+  --fw-normal: 450;
+  --fw-medium: 550;
+  --fw-bold: 680;
+
+  /* spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* radii / elevation / motion */
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --z-nav: 10;
+  --z-toast: 100;
+  --dur-fast: 90ms;
+  --dur-med: 160ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+html[data-theme="light"] {
+  --bg: #f6f8fa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --border: #d8dee4;
+  --border-strong: #c2cbd4;
+
+  --text: #1c2128;
+  --text-muted: #59636e;
+  --text-faint: #818b98;
+
+  --accent: #1a9b80;
+  --accent-hover: #15846d;
+  --accent-contrast: #ffffff;
+
+  --success: #1a7f37;
+  --success-bg: #e9f6ec;
+  --warning: #9a6700;
+  --warning-bg: #fcf3da;
+  --danger: #cf222e;
+  --danger-bg: #fbeae9;
+  --info: #0969da;
+  --info-bg: #ddeeff;
+
+  --shadow-1: 0 1px 2px rgba(31, 35, 40, 0.12);
+  --shadow-2: 0 8px 24px rgba(31, 35, 40, 0.16);
+}

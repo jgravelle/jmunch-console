@@ -1,0 +1,12 @@
+{
+  "repo": "jcodemunch-mcp",
+  "radar": {
+    "complexity": 78,
+    "dead_code": 91,
+    "cycles": 84,
+    "coupling": 80,
+    "test_gap": 88,
+    "churn_surface": 73,
+    "composite": 82
+  }
+}

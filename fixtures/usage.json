@@ -1,0 +1,36 @@
+{
+  "local": {
+    "available": true,
+    "hour": {"input": 18200, "output": 9400, "cache_read": 412000, "cache_creation": 22100, "messages": 41},
+    "day": {"input": 240500, "output": 131800, "cache_read": 5210000, "cache_creation": 301000, "messages": 512},
+    "day_usd": 8.42,
+    "minutes": [0,0,0,120,840,0,0,310,2200,1850,0,0,0,0,90,1400,2600,880,0,0,410,0,0,1900,2300,640,0,0,0,150,980,1700,0,0,520,2100,0,0,0,260,1300,940,0,0,0,1750,2050,0,0,380,0,0,1100,1600,720,0,0,290,1450,860],
+    "models": [
+      {"model": "claude-opus-4-8", "input": 152000, "output": 96400, "cache_read": 4100000, "cache_creation": 240000, "messages": 318, "usd": 6.31},
+      {"model": "claude-haiku-4-5", "input": 88500, "output": 35400, "cache_read": 1110000, "cache_creation": 61000, "messages": 194, "usd": 2.11}
+    ]
+  },
+  "org": {
+    "available": true,
+    "minutes": [0,0,0,400,2100,300,0,900,5200,4400,200,0,0,100,600,3400,6100,2100,0,0,1200,0,0,4300,5600,1700,0,0,0,500,2400,4100,0,0,1400,5200,0,0,0,800,3200,2400,0,0,0,4300,5100,0,0,1100,0,0,2800,4000,1900,0,0,900,3600,2200],
+    "models": [
+      {"model": "claude-opus-4-8", "input": 410000, "output": 215000, "cache_read": 9800000, "cache_creation": 520000, "usd": 13.74},
+      {"model": "claude-sonnet-4-6", "input": 180000, "output": 92000, "cache_read": 2400000, "cache_creation": 140000, "usd": 3.17}
+    ],
+    "hour_usd": 16.91,
+    "lag_note": "org data lands ~5 min behind real time"
+  },
+  "cost": {
+    "available": true,
+    "days": [
+      {"date": "2026-06-05", "usd": 41.20},
+      {"date": "2026-06-06", "usd": 38.75},
+      {"date": "2026-06-07", "usd": 12.10},
+      {"date": "2026-06-08", "usd": 9.85},
+      {"date": "2026-06-09", "usd": 44.60},
+      {"date": "2026-06-10", "usd": 51.02},
+      {"date": "2026-06-11", "usd": 17.33}
+    ],
+    "week_usd": 214.85
+  }
+}

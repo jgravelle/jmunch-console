@@ -1,0 +1,7 @@
+{
+  "agents": [
+    { "agent": "Claude Code", "wired": true, "method": "cli", "config_path": null },
+    { "agent": "Cursor", "wired": false, "method": "json_patch", "config_path": "~/.cursor/mcp.json" },
+    { "agent": "Codex", "wired": false, "method": "json_patch", "config_path": null }
+  ]
+}

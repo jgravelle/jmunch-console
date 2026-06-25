@@ -1,0 +1,37 @@
+{
+  "repos": [
+    {
+      "repo_id": "local/jcodemunch-mcp-0394b683",
+      "display_name": "jcodemunch-mcp",
+      "file_count": 487,
+      "symbol_count": 8789,
+      "languages": { "python": 445, "yaml": 22, "json": 15, "typescript": 3 },
+      "indexed_at": "2026-06-07T06:18:28Z",
+      "freshness": "fresh",
+      "watcher_state": "watching",
+      "lock_holder": null
+    },
+    {
+      "repo_id": "local/jdocmunch-mcp-7c21",
+      "display_name": "jdocmunch-mcp",
+      "file_count": 168,
+      "symbol_count": 2310,
+      "languages": { "python": 150, "markdown": 14 },
+      "indexed_at": "2026-06-05T22:04:00Z",
+      "freshness": "edited_uncommitted",
+      "watcher_state": "idle",
+      "lock_holder": null
+    },
+    {
+      "repo_id": "local/jdatamunch-mcp-3f90",
+      "display_name": "jdatamunch-mcp",
+      "file_count": 96,
+      "symbol_count": 1204,
+      "languages": { "python": 88, "sql": 5 },
+      "indexed_at": "2026-05-30T11:40:00Z",
+      "freshness": "stale_index",
+      "watcher_state": "off",
+      "lock_holder": "claude (watch-all)"
+    }
+  ]
+}

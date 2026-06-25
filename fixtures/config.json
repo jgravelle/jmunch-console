@@ -1,0 +1,11 @@
+{
+  "keys": [
+    { "key": "server_output", "type": "enum", "value": "adaptive", "default": "adaptive", "source": "default", "enum_choices": ["adaptive", "compact", "json"], "description": "Wire format for tool responses." },
+    { "key": "server_output_threshold", "type": "string", "value": "0.15", "default": "0.15", "source": "default", "description": "Min savings ratio before MUNCH encoding kicks in." },
+    { "key": "redact_response_secrets", "type": "bool", "value": true, "default": true, "source": "default", "description": "Strip AWS/GCP/JWT/etc. from responses." },
+    { "key": "use_ai_summaries", "type": "enum", "value": "auto", "default": "auto", "source": "global", "enum_choices": ["auto", "true", "false"], "description": "AI symbol summarization mode." },
+    { "key": "staleness_days", "type": "string", "value": "3", "default": "7", "source": "project", "description": "Days before a repo is flagged stale." },
+    { "key": "cross_repo_default", "type": "bool", "value": false, "default": false, "source": "default", "description": "Enable cross-repo traversal by default." },
+    { "key": "runtime_ingest_enabled", "type": "bool", "value": false, "default": false, "source": "default", "description": "HTTP live-ingest endpoints (two-key turn)." }
+  ]
+}

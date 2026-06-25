@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+data/
+.env
+.env.*
+
+# Internal design/roadmap doc — kept local, not published
+PRD.md

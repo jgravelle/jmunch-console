@@ -1,0 +1,48 @@
+{
+  "signals": {
+    "index_dir": "C:\\Users\\dev\\.code-index",
+    "log_file_env": "C:\\Users\\dev\\jcm.log",
+    "watcher_logs": 1,
+    "heartbeat": { "age_s": 6.2 },
+    "perf_telemetry_db": true
+  },
+  "servers": [
+    { "product": "jcodemunch", "name": "jCodeMunch-MCP", "pid": 18244, "state": "active", "detail": "last activity 6s ago" },
+    { "product": "jdocmunch", "name": "jDocMunch-MCP", "pid": 18512, "state": "running", "detail": "no heartbeat signal" }
+  ],
+  "logs": [
+    {
+      "path": "C:\\Users\\dev\\AppData\\Local\\Temp\\jcw_18244.log",
+      "name": "jcw_18244.log",
+      "kind": "watcher",
+      "size": 48211,
+      "age_s": 3.1,
+      "errors": 1,
+      "warnings": 2,
+      "lines": [
+        { "text": "2026-06-20 09:14:02 INFO watcher: rescan start (1 path)", "level": "info" },
+        { "text": "2026-06-20 09:14:02 INFO indexing C:\\proj\\src (scoped)", "level": "info" },
+        { "text": "2026-06-20 09:14:09 WARNING discovery: 312418 files before ignore filters", "level": "warn" },
+        { "text": "2026-06-20 09:14:09 WARNING consider scoping the index or adding ignore patterns", "level": "warn" },
+        { "text": "2026-06-20 09:14:41 ERROR reindex stalled: walk exceeded 30s on C:\\proj\\node_modules", "level": "error" },
+        { "text": "2026-06-20 09:14:42 INFO watcher: idle", "level": "info" }
+      ]
+    },
+    {
+      "path": "C:\\Users\\dev\\jcm.log",
+      "name": "jcm.log",
+      "kind": "server",
+      "size": 9123,
+      "age_s": 6.4,
+      "errors": 0,
+      "warnings": 0,
+      "lines": [
+        { "text": "2026-06-20 09:13:58 INFO server: ready (stdio)", "level": "info" },
+        { "text": "2026-06-20 09:14:06 INFO search_symbols repo=local/proj 11 results", "level": "info" }
+      ]
+    }
+  ],
+  "hints": [
+    "1 error line(s) in the recent tail of jcw_18244.log — see the highlighted lines below."
+  ]
+}

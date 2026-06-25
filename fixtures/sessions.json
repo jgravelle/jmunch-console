@@ -1,0 +1,7 @@
+{
+  "sessions": [
+    { "session_id": "a3f1-9c", "repo_id": "jcodemunch-mcp", "started_at": "2026-06-07T13:02:00", "summary": "Ship A: frontier-batched call-graph BFS content cache", "message_count": 41 },
+    { "session_id": "b7e2-4d", "repo_id": "jcodemunch-mcp", "started_at": "2026-06-07T09:15:00", "summary": "Cache the per-call git HEAD probe (B1)", "message_count": 28 },
+    { "session_id": "c0a9-11", "repo_id": "jcodemunch-mcp", "started_at": "2026-06-06T18:40:00", "summary": "Fix schema encoders swallowing error responses", "message_count": 33 }
+  ]
+}

@@ -1,0 +1,57 @@
+name: Release
+
+# Auto-tag + GitHub-release every version bump pushed to main, so releases can
+# never lag the code again. The version source of truth is the brand in
+# web/index.html (<small>vX.Y.Z</small>) -- the one value bumped on every
+# release. A push whose version already has a release is a no-op, so non-bump
+# pushes (docs, infra) don't create empty releases.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag + release on version bump
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          VER=$(grep -oE '<small>v[0-9]+\.[0-9]+\.[0-9]+</small>' web/index.html \
+                | head -1 | sed -E 's/.*v([0-9.]+).*/\1/' || true)
+          if [ -z "${VER:-}" ]; then
+            echo "No <small>vX.Y.Z</small> version found in web/index.html; skipping."
+            exit 0
+          fi
+
+          TAG="v${VER}"
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; nothing to do."
+            exit 0
+          fi
+
+          SUBJ=$(git log -1 --format=%s)
+          # Notes = commit body minus the Co-Authored-By / generated-with trailers
+          # and blank lines; fall back to the subject for single-line commits.
+          NOTES=$(git log -1 --format=%B \
+                  | sed -E '/^Co-Authored-By:/d; /Generated with \[Claude Code\]/d; /^[[:space:]]*$/d' \
+                  || true)
+          [ -z "${NOTES:-}" ] && NOTES="$SUBJ"
+
+          echo "Creating release $TAG"
+          gh release create "$TAG" --repo "$REPO" --target "$SHA" \
+            --title "$SUBJ" --notes "$NOTES"

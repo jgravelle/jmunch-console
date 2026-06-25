@@ -1,0 +1,423 @@
+/* jMunch Console — premium polish layer (AURORA pass).
+   Loaded AFTER components.css so these rules win on equal specificity.
+   Reversible: remove the <link> in index.html to disable.
+
+   Builds on the earlier polychrome pass and pushes it to a sleek, high-tech
+   read — directly answering the "professional but monotone" critique:
+     · a slow-drifting aurora field behind the shell
+     · frosted-glass chrome + panels (backdrop-filter)
+     · accent glow on numbers, pills, switches, primary buttons
+     · per-KPI hue from the existing chart palette
+     · live "tick" flash already comes from app.js (flashSet)
+   No new fonts, no CDNs, offline-safe. Honors prefers-reduced-motion.
+   Panels stay near-opaque so text contrast holds WCAG 2.1 AA. */
+
+:root {
+  --accent-2: #46c7e6;
+  --glow:   color-mix(in srgb, var(--accent) 55%, transparent);
+  --glow-2: color-mix(in srgb, var(--accent-2) 55%, transparent);
+  --grad-accent: linear-gradient(135deg, var(--accent), var(--accent-2));
+  --hair: rgba(255, 255, 255, 0.06);
+  --glass:        color-mix(in srgb, var(--surface) 82%, transparent);
+  --glass-blur:   blur(14px) saturate(150%);
+  --surface-grad: linear-gradient(180deg,
+      color-mix(in srgb, var(--surface-raised) 88%, transparent) 0%,
+      color-mix(in srgb, var(--surface) 88%, transparent) 100%);
+  --tile-shadow: inset 0 1px 0 var(--hair), 0 14px 36px -20px rgba(0, 0, 0, 0.80);
+  --grad-title: linear-gradient(92deg, var(--text) 0%, #bfeee2 55%, var(--accent-2) 100%);
+  --num-glow-strength: 42%;
+}
+html[data-theme="light"] {
+  --accent-2: #1796a8;
+  --glow:   color-mix(in srgb, var(--accent) 36%, transparent);
+  --glow-2: color-mix(in srgb, var(--accent-2) 34%, transparent);
+  --hair: rgba(255, 255, 255, 0.75);
+  --glass:        color-mix(in srgb, #ffffff 80%, transparent);
+  --surface-grad: linear-gradient(180deg, rgba(255, 255, 255, 0.90) 0%, rgba(244, 247, 250, 0.90) 100%);
+  --tile-shadow: inset 0 1px 0 var(--hair), 0 14px 30px -22px rgba(31, 40, 60, 0.30);
+  --grad-title: linear-gradient(92deg, var(--text) 0%, #0e8f76 100%);
+  --num-glow-strength: 0%;
+}
+
+/* ---- accent palettes (cycled by the topbar swatch button) ----
+   aurora = teal->cyan (default) · ember = teal->amber · spectrum = indigo->violet.
+   KPI tiles keep their per-hue chart palette; these recolor the *system* accent
+   (nav, buttons, glow, brand dot, switches, aurora field, title sheen). */
+html[data-accent="ember"]    { --accent-2: #f0a23a; }
+html[data-theme="light"][data-accent="ember"]    { --accent-2: #c47a12; }
+html[data-accent="spectrum"] { --accent: #7c8cff; --accent-2: #c46bff; }
+html[data-theme="light"][data-accent="spectrum"] { --accent: #5b53e6; --accent-2: #9a45e0; }
+
+/* ---- ambient: drifting aurora field behind the shell ---- */
+body { position: relative; }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 240px),
+    radial-gradient(46% 38% at 6% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
+    radial-gradient(42% 36% at 98% 2%, color-mix(in srgb, var(--accent-2) 16%, transparent), transparent 58%);
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: -25%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  filter: blur(34px);
+  background:
+    radial-gradient(34% 34% at 18% 24%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 62%),
+    radial-gradient(38% 38% at 84% 78%, color-mix(in srgb, var(--accent-2) 18%, transparent), transparent 62%);
+  animation: jp-aurora 28s var(--ease) infinite;
+}
+.app { position: relative; z-index: 1; }
+@keyframes jp-aurora {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(2.5%, 3%) scale(1.08); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+/* ---- frosted glass: shell chrome ---- */
+.brand, .topbar, nav.side {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.brand .dot {
+  background: var(--grad-accent);
+  box-shadow: 0 0 10px var(--glow);
+}
+
+/* ---- per-tile accent: each KPI gets its own hue from the chart palette ---- */
+.kpis .kpi { --tile: var(--chart-1); }                      /* teal   */
+.kpis .kpi:nth-child(2) { --tile: var(--chart-2); }         /* blue   */
+.kpis .kpi:nth-child(3) { --tile: var(--chart-4); }         /* violet */
+.kpis .kpi:nth-child(4) { --tile: var(--chart-6); }         /* cyan   */
+.kpis .kpi:nth-child(5) { --tile: var(--chart-3); }         /* gold   */
+.kpis .kpi:nth-child(6) { --tile: var(--chart-5); }         /* coral  */
+.kpis .kpi:nth-child(n+7) { --tile: var(--chart-1); }
+.card { --tile: var(--chart-1); }
+
+/* hero number: vivid gradient in that tile's hue + matching glow */
+.kpi .k-value {
+  background: linear-gradient(118deg,
+      var(--tile) 0%,
+      color-mix(in srgb, var(--tile) 50%, #ffffff) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  font-variant-numeric: tabular-nums;
+  filter: drop-shadow(0 0 16px color-mix(in srgb, var(--tile) var(--num-glow-strength), transparent));
+}
+
+/* page title sheen */
+.view h1 {
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ---- tiles + cards: frosted glass, per-hue top bar, depth, hover lift/glow ---- */
+.kpi, .card, .session, .config-row, .cfg-group, .logcard, .modal, .packs-pitch {
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+.kpi, .card {
+  position: relative;
+  background: var(--surface-grad);
+  box-shadow: var(--tile-shadow);
+  overflow: hidden;
+  transition: transform var(--dur-med) var(--ease),
+              box-shadow var(--dur-med) var(--ease),
+              border-color var(--dur-med) var(--ease);
+}
+.kpi::before, .card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg,
+      var(--tile),
+      color-mix(in srgb, var(--tile) 55%, #ffffff));
+  box-shadow: 0 0 12px -1px var(--tile);
+}
+.kpi:hover, .card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--tile) 60%, var(--border));
+  box-shadow: 0 18px 42px -16px color-mix(in srgb, var(--tile) 60%, transparent),
+              inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+/* ---- status: pills + dots glow ---- */
+.pill::before { box-shadow: 0 0 6px currentColor; }
+.pill--fresh { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 30%, transparent); }
+.pill--edited_uncommitted { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 30%, transparent); }
+.pill--stale_index { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 30%, transparent); }
+
+/* ---- controls: accent glow ---- */
+.btn--accent {
+  background: var(--grad-accent);
+  border-color: transparent;
+  box-shadow: 0 8px 20px -10px var(--glow);
+}
+.btn--accent:hover { background: var(--grad-accent); filter: brightness(1.07); }
+.switch[aria-checked="true"] { box-shadow: 0 0 12px -2px var(--glow); }
+
+/* ---- charts: gentle glow so bars/series read as "alive" ---- */
+.view svg rect { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 35%, transparent)); }
+.view svg polyline, .view svg path { filter: drop-shadow(0 0 4px var(--glow)); }
+
+/* ---- nav: bright gradient indicator + tinted active row ---- */
+.nav-item { position: relative; }
+.nav-item.active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-raised));
+  box-shadow: none;
+}
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 62%;
+  width: 3px;
+  transform: translateY(-50%);
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--chart-1), var(--chart-2));
+  box-shadow: 0 0 10px 0 var(--accent);
+}
+
+/* ---- "live" badge pulse ---- */
+.live-badge { animation: jp-pulse 2s ease-in-out infinite; }
+
+/* ---- entrance motion ---- */
+@keyframes jp-rise {
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes jp-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+.kpi, .card, .session { animation: jp-rise 240ms var(--ease) both; }
+.kpis .kpi:nth-child(2), .grid .card:nth-child(2) { animation-delay: 55ms; }
+.kpis .kpi:nth-child(3), .grid .card:nth-child(3) { animation-delay: 110ms; }
+.kpis .kpi:nth-child(4), .grid .card:nth-child(4) { animation-delay: 165ms; }
+.kpis .kpi:nth-child(5), .grid .card:nth-child(5) { animation-delay: 220ms; }
+.kpis .kpi:nth-child(n+6), .grid .card:nth-child(n+6) { animation-delay: 260ms; }
+.kpi .k-value { animation: jp-rise 240ms var(--ease) both; animation-delay: 130ms; }
+
+/* ---- reduced-motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .kpi, .card, .session, .kpi .k-value, .live-badge, body::after { animation: none !important; }
+  .kpi, .card { transition: none; }
+}
+
+/* ---- per-theme typography + container character ----
+   Each accent palette is a full mini-theme: its own display font and container
+   shape, not just an accent recolor. System font stacks only (offline-safe, no
+   CDNs). Drives .view h1 / .brand / .section-title font, and tile radius, blur,
+   and border tint.
+     aurora   = clean geometric sans, rounded frosted glass (default)
+     ember    = warm humanist serif, cozy rounded + softer glass + warm border
+     spectrum = geometric monospace, sharp crisp tiles + tighter blur          */
+html                          { --font-display: var(--font-sans); --tile-radius: var(--radius-lg); }
+html[data-accent="aurora"]    { --tile-radius: 13px; --glass-blur: blur(14px) saturate(150%); }
+html[data-accent="ember"]     { --font-display: Georgia, Cambria, "Times New Roman", serif;
+                                --tile-radius: 18px; --glass-blur: blur(8px) saturate(135%); }
+html[data-accent="spectrum"]  { --font-display: ui-monospace, "Cascadia Code", Consolas, monospace;
+                                --tile-radius: 4px; --glass-blur: blur(18px) saturate(165%); }
+
+.view h1, .brand, .section-title { font-family: var(--font-display); }
+.kpi, .card { border-radius: var(--tile-radius); }
+html[data-accent="ember"] .kpi,    html[data-accent="ember"] .card    { border-color: color-mix(in srgb, var(--accent-2) 28%, var(--border)); }
+html[data-accent="spectrum"] .kpi, html[data-accent="spectrum"] .card { border-color: color-mix(in srgb, var(--accent) 42%, var(--border)); }
+
+/* ---- fit-to-tile figures ----
+   The all-time savings counter keeps growing and used to clip out of its tile.
+   Make each KPI a size container and scale its value to the tile width, so the
+   full unabridged number always shows: ~32px on wide tiles, shrinking only as
+   far as needed on narrow ones. */
+.kpi { container-type: inline-size; }
+.kpi .k-value {
+  font-size: clamp(15px, 9cqi, var(--fs-2xl));
+  white-space: nowrap;
+}
+
+/* ---- ambient hairline grid ----
+   A faint grid behind the main content, tinted from a blend of the theme's two
+   accents so it shifts with the chosen palette (teal/cyan aurora, teal/amber
+   ember, indigo/violet spectrum). Sits under the cards; fixed as the view
+   scrolls; kept low-contrast so text/WCAG is unaffected. */
+:root {
+  --grid-line: color-mix(in srgb, color-mix(in srgb, var(--accent), var(--accent-2)) 8%, transparent);
+  --grid-size: 34px;
+}
+html[data-theme="light"] {
+  --grid-line: color-mix(in srgb, color-mix(in srgb, var(--accent), var(--accent-2)) 13%, transparent);
+}
+main.view {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+  background-position: -1px -1px;
+}
+
+/* ---- starter-pack savings badge: bold, theme-matched, the storefront hook ---- */
+.pack-savings {
+  display: inline-block;
+  align-self: flex-start;
+  margin: 2px 0 var(--sp-2);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: var(--fs-md);
+  letter-spacing: 0.01em;
+  color: #07140f;
+  background: var(--grad-accent);
+  box-shadow: 0 6px 18px -6px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+html[data-theme="light"] .pack-savings { color: #ffffff; }
+
+/* ---- BETA tag in the brand: subtle accent pill next to the version ---- */
+.brand .beta {
+  margin-left: var(--sp-1);
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+
+/* ---- Alerts: notify-only threshold cards ---- */
+.alert-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 2px 0 var(--sp-4);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-sm);
+  border: 1px solid transparent;
+}
+.alert-summary.ok     { color: var(--success); background: var(--success-bg); border-color: var(--success); }
+.alert-summary.warn   { color: var(--warning); background: var(--warning-bg); border-color: var(--warning); }
+.alert-summary.breach { color: var(--danger);  background: var(--danger-bg);  border-color: var(--danger); }
+
+.alert-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: var(--sp-3);
+}
+.alert-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.alert-card.alert--breach { border-left-color: var(--danger); }
+.alert-card.alert--warn   { border-left-color: var(--warning); }
+.alert-card.alert--ok     { border-left-color: var(--success); }
+.alert-card.alert--nodata,
+.alert-card.alert--off    { border-left-color: var(--border-strong); opacity: 0.82; }
+
+.alert-head { display: flex; align-items: flex-start; gap: var(--sp-3); }
+.alert-head .sdot { margin-top: 4px; flex: none; }
+.alert-text { flex: 1 1 auto; min-width: 0; }
+.alert-label { font-weight: var(--fw-medium); }
+.alert-state {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-weight: var(--fw-normal);
+  margin-left: var(--sp-1);
+}
+.alert-head .switch { flex: none; margin-top: 2px; }
+
+.alert-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+.alert-now strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.alert-thr { display: inline-flex; align-items: center; gap: var(--sp-2); }
+.alert-edit {
+  width: 9ch;
+  padding: 2px 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.alert-unit { color: var(--text-faint); }
+.alert-advanced { margin-top: var(--sp-4); }
+
+/* nav badge: breach count on the Alerts tab, visible from any screen */
+.nav-item { position: relative; }
+.nav-item.has-alert { color: var(--danger); }
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin-left: var(--sp-2);
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: #fff;
+  background: var(--danger);
+}
+
+/* in-Console banner: a breach is visible regardless of the active screen */
+.alert-banner {
+  position: fixed;
+  top: var(--sp-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: min(90vw, 760px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  box-shadow: var(--shadow-2);
+  cursor: pointer;
+}
+.alert-banner-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alert-banner-go { font-weight: var(--fw-bold); flex: none; }
+.alert-banner-dot {
+  flex: none;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 8px -1px var(--danger);
+}
