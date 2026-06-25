@@ -83,6 +83,7 @@ index freshness, and watcher state.
   grid. Free packs install with no key; the paid library unlocks with any valid
   suite license. You can also **adopt** a pack to claim repos you already indexed
   independently.
+---
 
 ### Savings
 
@@ -97,6 +98,8 @@ file bytes.
 
 The per-tool table past the first row is part of the [license soft-gate](#licensing-and-the-soft-gate);
 enter a valid key to reveal it in full.
+
+---
 
 ### Token Usage
 
@@ -114,6 +117,7 @@ sources:
 
 > Note on cost: the dollar figures are an **estimate at API list prices**. If
 > you're on a subscription, the number is notional, not out-of-pocket.
+---
 
 ### Productivity
 
@@ -130,6 +134,7 @@ is self-defeating rather than rewarded.
 > contains many repos, per-repo cost can't always be split and the tile says
 > **"not attributable"** rather than a misleading `$0`. Launching a session at
 > the repo root (the Launch screen does this) makes the cost overlay light up.
+---
 
 ### Sessions
 
@@ -142,6 +147,8 @@ project, branch, summary, and message count.
 
 Resuming sessions past the first three is part of the [license soft-gate](#licensing-and-the-soft-gate).
 
+---
+
 ### Launch
 
 Open a detected agent (e.g. Claude Code) in one of your indexed repos, in a fresh
@@ -151,6 +158,7 @@ terminal at the repo root.
 - Pick the agent and the repo, then launch. The repo path is resolved
   server-side from the index, never taken from the browser, and the command comes
   from a fixed map. Gated like other actions.
+---
 
 ### Processes
 
@@ -165,6 +173,7 @@ the server it fronts). Auto-refreshes every few seconds.
 - The console never owned these processes (your MCP client spawns them), so a
   "stop" is really *terminate, and let the client respawn on its next reconnect or
   tool call*. Gated.
+---
 
 ### Logging
 
@@ -195,6 +204,7 @@ states:
   created on its first tool call after that.
 - **off**: turn on `perf_telemetry_enabled` in Config (or set
   `JCODEMUNCH_PERF_TELEMETRY=1`), then restart the jcm server.
+---
 
 ### Alerts
 
@@ -220,6 +230,7 @@ shows a count badge on the Alerts tab and a banner that's visible from any scree
 - Edit a threshold and press Enter or **save**; toggle a card on/off with its
   switch. Your choices persist in `data/console_settings.json` and survive
   restarts.
+---
 
 ### Config
 
@@ -260,6 +271,8 @@ editable in the Config screen; those edits persist to a gitignored
 `data/console_settings.json` read at startup. An explicitly-set environment
 variable wins over the file and locks its control in the UI.
 
+---
+
 ### Actions and safety
 
 The console performs system-changing actions out of the box: editing config,
@@ -276,6 +289,7 @@ The safety model is not a global on/off prompt; it's structural:
   `JMUNCH_CONSOLE_TOKEN` to require a token on top of that.
 - **Read-only mode.** Set `JMUNCH_CONSOLE_READ_ONLY=1` for a look-don't-touch
   deployment; every action control disables with a reason.
+---
 
 ### Restarting MCP servers
 
@@ -290,6 +304,8 @@ respawn on their next reconnect or tool call. Restarting one product's transport
 others alone. The success toast is tailored to the clients the console detects
 (for example, Claude Code's `/mcp` reconnect).
 
+---
+
 ### Stopping and restarting the console
 
 The **Config** screen's **Console process** group has two buttons (both gated):
@@ -302,6 +318,8 @@ The **Config** screen's **Console process** group has two buttons (both gated):
   your terminal or launcher to return.
 
 You can also click the **brand dot** (top-left) for the same stop/restart menu.
+
+---
 
 ### Capturing logs and perf telemetry
 
@@ -316,6 +334,7 @@ buttons:
   then **restart the jcm server** so it loads the setting; the db appears on the
   first tool call after the restart. The Logging badge shows on / pending restart
   / off so you can see exactly which step is outstanding.
+---
 
 ### Licensing and the soft-gate
 
@@ -334,6 +353,7 @@ boundary. It exists to surface the value of a license, not to enforce one.
   (the dot prompt), then an environment variable, then the suite's `license_key`
   config, so a key set in any of those places counts and agrees with what the
   suite sees.
+---
 
 ### Sample-data (fixtures) mode
 
