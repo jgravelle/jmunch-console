@@ -1,0 +1,6 @@
+{
+  "reply": "Hi! I'm the jMunch Console assistant (sample reply — fixtures mode is on, so I'm not calling Claude). Normally I read the real source on your machine to answer questions about installing, configuring, and using the console and the jMunch suite. Turn fixtures mode off in Config to chat for real.",
+  "session_id": null,
+  "cost_usd": null,
+  "mode": "live"
+}

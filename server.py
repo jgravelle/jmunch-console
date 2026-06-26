@@ -78,6 +78,10 @@ _SETTINGS_ENV = {
     "mcp_bin": "JMUNCH_MCP_BIN",
     "fixtures": "JMUNCH_CONSOLE_FIXTURES",
     "read_only": "JMUNCH_CONSOLE_READ_ONLY",
+    # In-console Help chat. On by default; JMUNCH_CONSOLE_CHAT=0 hard-disables it
+    # for offline/air-gapped deployments (the bot makes an outbound call via the
+    # user's own `claude` CLI). Read-only by design — it never edits or runs.
+    "chat": "JMUNCH_CONSOLE_CHAT",
     # The team-SKU org id. Not a JMUNCH_CONSOLE_* knob — it's the suite's own
     # JCODEMUNCH_ORG_ID env var, which `org()` reads and the `org-rollup`
     # subprocess inherits. Persisting it here lets the org savings rollup be
@@ -155,6 +159,20 @@ ALLOW_LAUNCH = not (
 # so `server.py` edits take effect without a manual restart (web/ files are
 # already hot — served fresh from disk each request). Off by default.
 RELOAD = os.environ.get("JMUNCH_CONSOLE_RELOAD") == "1"
+
+# In-console Help chat (read-only "Ask" bot). It shells out to the user's own
+# `claude` CLI in headless print mode, so there are no API keys for the console
+# to manage and the cost lands on the user's own Claude quota. Default model is
+# a cheaper tier than whatever their CLI defaults to; JMUNCH_CONSOLE_CHAT_MODEL
+# overrides (e.g. 'opus' for harder questions). CHAT_ENABLED gates the feature.
+CHAT_ENABLED = os.environ.get("JMUNCH_CONSOLE_CHAT", "1") != "0"
+CHAT_MODEL = os.environ.get("JMUNCH_CONSOLE_CHAT_MODEL", "sonnet")
+# By default the help bot runs on the user's Claude SUBSCRIPTION, not metered
+# API billing: we strip ANTHROPIC_API_KEY/AUTH_TOKEN (and cloud-provider routing)
+# from the chat subprocess so `claude` falls through to its OAuth login. Set
+# JMUNCH_CONSOLE_CHAT_USE_API=1 for deployments that have an API key but no
+# subscription and would rather pay per token.
+CHAT_USE_API = os.environ.get("JMUNCH_CONSOLE_CHAT_USE_API") == "1"
 
 
 # Optional .env at the repo root (gitignored). The one secret the Console reads
@@ -3216,8 +3234,8 @@ def console_set(key: str, value) -> dict:
     gate's own control, and it still rides token auth + the localhost bind. A
     key the environment pinned is refused so an operator's env-var choice can't
     be overridden from the browser."""
-    global ALLOW_LAUNCH, FORCE_FIXTURES
-    if key not in ("port", "token", "mcp_bin", "fixtures", "actions", "org_id"):
+    global ALLOW_LAUNCH, FORCE_FIXTURES, CHAT_ENABLED
+    if key not in ("port", "token", "mcp_bin", "fixtures", "actions", "org_id", "chat"):
         return {"error": f"unknown setting: {key!r}", "_status": 400}
     stored = "read_only" if key == "actions" else key
     if stored in _ENV_PINNED:
@@ -3231,6 +3249,10 @@ def console_set(key: str, value) -> dict:
     elif key == "fixtures":
         FORCE_FIXTURES = bool(value)
         d["fixtures"] = "1" if FORCE_FIXTURES else "0"
+    elif key == "chat":
+        CHAT_ENABLED = bool(value)
+        d["chat"] = "1" if CHAT_ENABLED else "0"
+        _CACHE.pop("chat_cap", None)  # capability flips immediately, not in 30s
     elif key == "port":
         try:
             port = int(value)
@@ -3600,8 +3622,134 @@ def delivery_panel(repo_id: str, window_raw) -> dict:
                  "licensed": _any_valid_license()}, "live")
 
 
+# --------------------------------------------------------------------------- #
+# Help chat: a read-only "Ask" bot grounded in the user's own installed source.
+# It shells out to their `claude` CLI in headless print mode, so the console
+# manages no API keys and the cost lands on the user's own Claude quota. The bot
+# gets the built-in Read/Glob/Grep tools scoped to the console repo (cwd) and
+# nothing else - it reads the real code on the machine but never edits or runs.
+# The user's own MCP servers are suppressed (empty --mcp-config + strict) to
+# keep each turn cheap and deterministic. We deliberately do NOT load
+# jCodeMunch-MCP live: a single MCP server injects its whole ~150-tool surface
+# into context every turn, which cost MORE than reading files natively and
+# confused tool selection. The Build mode that implements features and opens
+# PRs is a deliberate future phase.
+# --------------------------------------------------------------------------- #
+
+# Kept small on purpose: a big always-on system prompt is paid every turn.
+CHAT_PERSONA = (
+    "You are the jMunch Console help assistant, embedded in the running console "
+    f"v{VERSION}. Answer questions about installing, configuring, and using the "
+    "console and the jMunch suite (jCodeMunch / jDocMunch / jDataMunch MCPs). "
+    "The console's full source is in the current working directory - read the "
+    "real files with Read/Glob/Grep to ground your answer and cite file:line; "
+    "do not guess. Answer directly: do not narrate your steps or say you have "
+    "gathered what you need - just give the answer. Be concise and concrete. "
+    "You are STRICTLY READ-ONLY: never "
+    "edit files, never run shell commands, never propose a command for the user "
+    "to paste as 'the answer'. If the user asks for a feature the console does "
+    "not have, say so plainly, then mention that a future Build mode will be "
+    "able to implement it into their install and share it back as a pull "
+    "request. Screens available: Index & Watcher, Savings, Token Usage, "
+    "Productivity, Sessions, Launch, Processes, Logging, Alerts, Config, Help."
+)
+
+
+# Auth sources that take precedence over the claude.ai subscription login. We
+# drop these from the chat subprocess (unless CHAT_USE_API) so the bot bills the
+# user's plan rather than their API account.
+_CHAT_API_AUTH_VARS = (
+    "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL",
+    "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+)
+
+
+def _chat_env() -> dict:
+    """Subprocess env for the help bot. By default, strip API-key/cloud auth so
+    `claude` uses the subscription OAuth login (no metered API charge)."""
+    if CHAT_USE_API:
+        return dict(os.environ)
+    return {k: v for k, v in os.environ.items() if k not in _CHAT_API_AUTH_VARS}
+
+
+def _chat_auth_mode() -> str:
+    """'subscription' unless an API key is present and we're set to honor it."""
+    return "api" if (CHAT_USE_API and os.environ.get("ANTHROPIC_API_KEY")) else "subscription"
+
+
+def _chat_capability() -> dict:
+    """What the Help chat can do right now. 'off' when claude is missing or the
+    feature is disabled, else 'live'. `indexed` reports whether jCodeMunch has
+    this console indexed - informational only (Phase 1 reads files natively;
+    live MCP retrieval is deferred because it bloats per-turn cost)."""
+    if not CHAT_ENABLED:
+        return _tag({"available": False, "mode": "off",
+                     "hint": "Help chat is turned off (Config -> help chat)."}, "live")
+    if not shutil.which("claude"):
+        return _tag({"available": False, "mode": "off",
+                     "hint": "Install Claude Code (the `claude` CLI) to enable in-console help."}, "live")
+    try:
+        indexed = any(
+            r.get("source_root") and Path(r["source_root"]).resolve() == ROOT
+            for r in repos().get("repos", [])
+        )
+    except Exception:
+        indexed = False
+    return _tag({"available": True, "mode": "live", "model": CHAT_MODEL,
+                 "indexed": indexed, "auth": _chat_auth_mode()}, "live")
+
+
+def chat(message: str, session_id) -> dict:
+    """One read-only Help turn. Spawns `claude -p` with Read/Glob/Grep scoped to
+    the console repo, grounded in the on-disk source. Returns the reply plus a
+    session_id the client echoes back to continue the conversation."""
+    if FORCE_FIXTURES:
+        return _tag(_fixture("chat"), "fixture")
+    cap = _cached("chat_cap", 30.0, _chat_capability)
+    if not cap.get("available"):
+        return {"error": cap.get("hint", "Help chat is unavailable."), "_status": 404}
+    msg = (message or "").strip()
+    if not msg:
+        return {"error": "empty message", "_status": 400}
+    exe = shutil.which("claude")
+    if not exe:
+        return {"error": "the `claude` CLI is no longer on PATH", "_status": 404}
+
+    # Read-only file tools only; suppress the user's own MCP servers so each turn
+    # stays small and predictable. cwd=ROOT scopes relative reads to the console.
+    args = [exe, "-p", "--output-format", "json", "--model", CHAT_MODEL,
+            "--append-system-prompt", CHAT_PERSONA,
+            "--mcp-config", '{"mcpServers":{}}', "--strict-mcp-config",
+            "--tools", "Read,Glob,Grep"]
+    if session_id:
+        args += ["--resume", str(session_id)]
+
+    try:
+        out = subprocess.run(args, input=msg, capture_output=True, text=True,
+                             encoding="utf-8", cwd=str(ROOT), timeout=180,
+                             env=_chat_env())
+    except subprocess.TimeoutExpired:
+        return {"error": "the assistant took too long to respond - try a shorter question",
+                "_status": 504}
+    except (OSError, subprocess.SubprocessError) as e:
+        return {"error": f"chat invocation failed: {e}", "_status": 500}
+    raw = (out.stdout or "").strip()
+    try:
+        j = json.loads(raw)
+    except ValueError:
+        return {"error": (out.stderr or raw or "no output from claude").strip()[:500],
+                "_status": 502}
+    if j.get("is_error"):
+        return {"error": (j.get("result") or "the assistant returned an error").strip()[:500],
+                "hint": "run `claude` once in a terminal to finish logging in",
+                "_status": 502}
+    return _tag({"reply": j.get("result", ""), "session_id": j.get("session_id"),
+                 "cost_usd": j.get("total_cost_usd"), "mode": cap.get("mode")}, "live")
+
+
 _API = {
     "/api/agents": lambda q: agents(),
+    "/api/chat-capability": lambda q: _cached("chat_cap", 30.0, _chat_capability),
     "/api/products": lambda q: products(fresh=bool((q.get("fresh") or [""])[0])),
     "/api/org": lambda q: org(),
     "/api/repos": lambda q: repos(fresh=(q.get("fresh") or [""])[0] in ("1", "true", "yes")),
@@ -3629,6 +3777,7 @@ _API = {
         "token_set": bool(TOKEN),
         "mcp_bin": MCP_BIN,
         "org_id": os.environ.get("JCODEMUNCH_ORG_ID", ""),
+        "chat_enabled": CHAT_ENABLED,
         "pinned": sorted(_ENV_PINNED),
         "_source": "live",
     },
@@ -3640,6 +3789,7 @@ _API = {
 _POST_API = {
     "/api/launch":      lambda b: launch(str(b.get("agent", "")), str(b.get("repo_id", ""))),
     "/api/resume":      lambda b: resume(str(b.get("session_id", ""))),
+    "/api/chat":        lambda b: chat(str(b.get("message", "")), b.get("session_id")),
     "/api/license":     lambda b: set_license(str(b.get("product", "")), str(b.get("key", ""))),
     "/api/upgrade":     lambda b: upgrade(str(b.get("product", ""))),
     "/api/git-update":  lambda b: git_update(str(b.get("product", ""))),

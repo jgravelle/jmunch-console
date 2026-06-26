@@ -16,6 +16,7 @@ licensing). For a quick overview and install, see the [README](README.md).
   - [Processes](#processes)
   - [Logging](#logging)
   - [Alerts](#alerts)
+  - [Help](#help)
   - [Config](#config)
 - [Operations](#operations)
   - [Environment variables](#environment-variables)
@@ -232,14 +233,47 @@ shows a count badge on the Alerts tab and a banner that's visible from any scree
   restarts.
 ---
 
+### Help
+
+An in-console assistant that answers questions about installing, configuring, and
+using the console and the jMunch suite. It is **read-only**: it can read the real
+source on your machine to give specific, cited answers, but it never edits files,
+runs commands, or changes your setup.
+
+**How it works:**
+- It runs through your own local **Claude Code** (`claude`) CLI, so the console
+  manages no API keys. By default it uses your **Claude subscription**, not
+  metered API billing, even if an `ANTHROPIC_API_KEY` is present in your
+  environment (the console strips it for this call). Set
+  `JMUNCH_CONSOLE_CHAT_USE_API=1` if you have no subscription and prefer to pay
+  per token.
+- It reads the installed console source with read-only file tools to ground its
+  answers and cite `file:line`, rather than guessing.
+- Conversations are multi-turn within a visit; ask follow-ups and it keeps
+  context.
+
+**How to:**
+- Open the **Help** tab and type a question (Enter sends; Shift+Enter for a new
+  line). Try "How do I turn on the file watcher?" or "What does fixtures mode do?"
+- Don't see the tab? It needs the `claude` CLI installed and the feature enabled
+  (it's on by default). Turn it off any time with the **help chat** switch in
+  Config, or `JMUNCH_CONSOLE_CHAT=0` for offline/air-gapped deployments.
+
+> If you ask for something the console can't do yet, it will say so plainly. A
+> future Build mode will be able to implement a requested feature into your own
+> installation and help you share it back as a pull request.
+
+---
+
 ### Config
 
 Reached via the **gear** in the top bar. Three groups:
 
 1. **jMunch Console settings**: port, auth token, the jCodeMunch CLI path,
-   fixtures mode, the actions on/off switch, and your team org id. Most apply
-   live; port / token / CLI path apply on the next console restart. A setting
-   pinned by an environment variable renders locked with the reason.
+   fixtures mode, the help chat switch, the actions on/off switch, and your team
+   org id. Most apply live; port / token / CLI path apply on the next console
+   restart. A setting pinned by an environment variable renders locked with the
+   reason.
 2. **jCodeMunch-MCP settings**: the suite's own config keys, grouped by section,
    each tagged with its effective source (default / global / project) so override
    confusion is obvious. Editable when actions are enabled; writes go to the
@@ -265,6 +299,9 @@ see [Stopping and restarting the console](#stopping-and-restarting-the-console).
 | `JMUNCH_CONSOLE_FIXTURES` | (off) | Set `1` to force sample data for every endpoint |
 | `JMUNCH_CONSOLE_READ_ONLY` | (off) | Set `1` to disable every system-changing action. Actions are **on by default**. |
 | `JMUNCH_CONSOLE_RELOAD` | (off) | Dev convenience: set `1` to auto-restart the console when `server.py` changes |
+| `JMUNCH_CONSOLE_CHAT` | (on) | Set `0` to disable the Help chat assistant (hides the tab and the endpoint) |
+| `JMUNCH_CONSOLE_CHAT_MODEL` | `sonnet` | Model the Help chat uses (e.g. `opus` for harder questions) |
+| `JMUNCH_CONSOLE_CHAT_USE_API` | (off) | Set `1` to let the Help chat use `ANTHROPIC_API_KEY` (metered) instead of your Claude subscription |
 
 Port, auth token, CLI path, fixtures mode, the actions switch, and org id are also
 editable in the Config screen; those edits persist to a gitignored

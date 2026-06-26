@@ -42,6 +42,7 @@ console falls back to sample data. Offline-safe, binds to `127.0.0.1` only.
 | **Processes** | Live MCP server process tree, with stop/restart |
 | **Logging** | Crash and index log tail, plus one-click capture and perf telemetry |
 | **Alerts** | Notify-only thresholds on daily/hourly cost, token burn, and log errors |
+| **Help** | Read-only in-console assistant that answers questions from your real source, via your local Claude Code |
 | **Config** (gear) | Edit suite and console settings; restart or stop the console |
 
 The left rail also shows per-product install and license status, and a curated

@@ -12,6 +12,7 @@ const SCREENS = [
   { id: "processes", label: "Processes", render: renderProcesses },
   { id: "logging", label: "Logging", render: renderDiagnostics },
   { id: "alerts", label: "Alerts", render: renderAlerts },
+  { id: "help", label: "Help", render: renderHelp },
   { id: "config", label: "Config", render: renderConfig, gear: true }, // reached via the topbar gear, not the menu
 ];
 
@@ -236,6 +237,12 @@ function consoleSettingsGroup(meta) {
       label: "actions (config / launch / installs)",
       bool: !!meta.launch_enabled,
       desc: `Whether the console may perform system-changing actions — editing config, launching an agent, resuming a session, installing or upgrading a product. Off is a look-don't-touch mode. Takes effect immediately.`,
+    },
+    {
+      key: "chat", pin: "chat",
+      label: "help chat",
+      bool: !!meta.chat_enabled,
+      desc: `The in-console Help assistant. When on, the Help tab answers questions about the console using your local Claude Code (on your Claude subscription by default, not metered API). It's read-only — it never changes your setup. Off hides the tab and disables the endpoint. Takes effect immediately.`,
     },
     {
       key: "mcp_bin", pin: "mcp_bin",
@@ -1879,6 +1886,93 @@ function updateAlertBanner(d) {
   } else if (b) {
     b.remove();
   }
+}
+
+// ---- Help chat (read-only "Ask" bot, backed by the user's local Claude) ----
+let CHAT_SESSION = null; // session id from the last reply; echoed back to continue
+
+// Minimal, XSS-safe markdown: escape first, then format on the escaped text.
+function mdLite(s) {
+  let t = esc(String(s ?? ""));
+  t = t.replace(/```(\w+)?\n?([\s\S]*?)```/g, (m, _lang, code) => `<pre class="chat-code">${code.replace(/\n$/, "")}</pre>`);
+  t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
+  t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  return t.replace(/\n/g, "<br>");
+}
+
+function chatAppend(who, text, pending) {
+  const log = document.getElementById("chat-log");
+  const wrap = document.createElement("div");
+  wrap.className = "chat-msg " + who;
+  const body = pending
+    ? `<span class="chat-typing"><i></i><i></i><i></i></span>`
+    : who === "user" ? esc(text) : mdLite(text);
+  wrap.innerHTML = `<div class="chat-bubble">${body}</div>`;
+  log.appendChild(wrap);
+  log.scrollTop = 1e9;
+  return wrap;
+}
+
+async function renderHelp() {
+  const cap = await api("/api/chat-capability");
+  if (!cap || !cap.available) {
+    view.innerHTML = head("Help", "In-console assistant", "live") +
+      `<div class="empty">${esc((cap && cap.hint) || "Help chat is unavailable.")}</div>`;
+    return;
+  }
+  CHAT_SESSION = null;
+  const authNote = cap.auth === "subscription"
+    ? "on your Claude subscription" : "on your Anthropic API key (billed per token)";
+  view.innerHTML = head("Help",
+    "Ask how to install, configure, or use the console and the jMunch suite. Answers read the real source on this machine. Read-only — it never changes your setup.", "live") +
+    `<div class="chat">
+       <div id="chat-log" class="chat-log">
+         <div class="chat-msg bot"><div class="chat-bubble">Hi! I'm the jMunch Console assistant. Ask me anything about installing, configuring, or using the console and the suite. I read the real code on your machine, so I can be specific — and I'm read-only, so I won't touch your setup.</div></div>
+       </div>
+       <form id="chat-form" class="chat-composer">
+         <textarea id="chat-input" rows="2" placeholder="e.g. How do I turn on the file watcher? What does fixtures mode do?" autocomplete="off"></textarea>
+         <button class="btn btn--accent" type="submit" id="chat-send">Send</button>
+       </form>
+       <div class="chat-foot muted">${esc(cap.model || "claude")} · ${esc(authNote)} · read-only</div>
+     </div>`;
+  wireChat();
+}
+
+function wireChat() {
+  const form = document.getElementById("chat-form");
+  const input = document.getElementById("chat-input");
+  const send = document.getElementById("chat-send");
+  if (!form) return;
+  const submit = async () => {
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = "";
+    chatAppend("user", msg);
+    const pend = chatAppend("bot", "", true);
+    send.disabled = input.disabled = true;
+    let res;
+    try {
+      res = await (await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg, session_id: CHAT_SESSION }),
+      })).json();
+    } catch (e) { res = { error: String(e) }; }
+    send.disabled = input.disabled = false;
+    input.focus();
+    if (res && !res.error && res.reply !== undefined) {
+      CHAT_SESSION = res.session_id || CHAT_SESSION;
+      pend.querySelector(".chat-bubble").innerHTML = mdLite(res.reply || "(no answer)");
+    } else {
+      pend.classList.add("err");
+      const m = (res && (res.error || res.hint)) || "chat failed";
+      pend.querySelector(".chat-bubble").innerHTML = esc(m);
+    }
+    document.getElementById("chat-log").scrollTop = 1e9;
+  };
+  form.onsubmit = (e) => { e.preventDefault(); submit(); };
+  // Enter sends; Shift+Enter inserts a newline.
+  input.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } };
+  input.focus();
 }
 
 // ---- nav + routing ----
