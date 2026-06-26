@@ -84,7 +84,19 @@ _SETTINGS_ENV = {
     # configured from the UI instead of a shell export.
     "org_id": "JCODEMUNCH_ORG_ID",
 }
-_ENV_PINNED = {k for k, v in _SETTINGS_ENV.items() if os.environ.get(v) is not None}
+# A key is "pinned" only when its env var was set by the operator, not when the
+# console injected it from the settings file (the loop below). The two are
+# indistinguishable in os.environ after a re-exec — Config->Restart and the dev
+# reload both inherit the parent's mutated environ — so we carry the list of
+# self-injected keys forward in a private marker var and exclude them here.
+# Without this, restarting with e.g. `"fixtures": "0"` persisted would lock the
+# fixtures toggle as if an operator had pinned JMUNCH_CONSOLE_FIXTURES.
+_INJECTED_MARKER = "_JMUNCH_CONSOLE_INJECTED"
+_self_injected = {p for p in os.environ.get(_INJECTED_MARKER, "").split(",") if p}
+_ENV_PINNED = {
+    k for k, v in _SETTINGS_ENV.items()
+    if os.environ.get(v) is not None and k not in _self_injected
+}
 
 
 def _read_console_settings() -> dict:
@@ -115,10 +127,14 @@ def _set_console_flag(key: str, value: bool) -> None:
     _write_console_settings(d)
 
 
+_injected_now = []
 for _key, _val in _read_console_settings().items():
     _env = _SETTINGS_ENV.get(_key)
     if _env and _key not in _ENV_PINNED and _val is not None:
         os.environ[_env] = str(_val)
+        _injected_now.append(_key)
+# Record what we injected so a re-exec doesn't mistake it for an operator pin.
+os.environ[_INJECTED_MARKER] = ",".join(_injected_now)
 
 MCP_BIN = os.environ.get("JMUNCH_MCP_BIN", "jcodemunch-mcp")
 TOKEN = os.environ.get("JMUNCH_CONSOLE_TOKEN", "")
