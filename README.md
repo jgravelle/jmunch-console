@@ -4,6 +4,8 @@
 [![Version](https://img.shields.io/github/v/release/jgravelle/jmunch-console?label=version&color=blue)](https://github.com/jgravelle/jmunch-console/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+<img width="1898" height="993" alt="image" src="https://github.com/user-attachments/assets/2e575a16-e964-4ffd-ab04-01da28674db0" />
+
 A local, opt-in **control plane** for the jMunch suite, served in your browser.
 One pane of glass for config, index and watcher health, token savings and spend,
 session recall, agent launching, process control, and alerts.
