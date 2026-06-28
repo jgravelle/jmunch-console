@@ -37,7 +37,11 @@ a { color: var(--accent); text-decoration: none; }
   font-weight: var(--fw-bold);
   letter-spacing: -0.02em;
 }
-.brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+/* flex-shrink:0 — the dot has no text content, so in the no-wrap brand row it
+   was the only zero-min-width flex item and collapsed to a ~2px sliver (the
+   power control "vanished") once the title + version + BETA tag filled the
+   header. Keep it a fixed 9px circle; let the text shrink instead. */
+.brand .dot { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: var(--accent); }
 /* The dot doubles as the console power control (click → stop/restart menu). */
 .brand .dot[role="button"] { cursor: pointer; transition: box-shadow 0.12s, transform 0.12s; }
 .brand .dot[role="button"]:hover { transform: scale(1.25); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
