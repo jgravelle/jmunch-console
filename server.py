@@ -214,10 +214,6 @@ PRODUCTS = [
     ("jdatamunch", "jDataMunch-MCP", "jdatamunch-mcp", "JDATAMUNCH_LICENSE_KEY", "jdatamunch-mcp", "jgravelle/jdatamunch-mcp"),
 ]
 PRODUCT_IDS = {p[0] for p in PRODUCTS}
-# Only jCodeMunch validates a license key (org-rollup + premium packs). jDoc and
-# jData are free / honor-system — they read no *_LICENSE_KEY and never call
-# validate.php — so the rail shows them "not required", not a missing "none".
-LICENSE_GATED = {"jcodemunch"}
 
 # jDoc/jData have no rich config file like jcm's — they're configured by a few
 # env vars (read across their modules). Rather than tabs over an empty config,
@@ -1921,8 +1917,6 @@ def _validate_license(product_id: str, key: str) -> dict:
 
 def _license_state(product_id: str, key: str) -> dict:
     """Resolve a (product, key) to a UI-ready license status block."""
-    if product_id not in LICENSE_GATED:
-        return {"license": "not_required"}
     key = (key or "").strip()
     if not key:
         return {"license": "none"}
