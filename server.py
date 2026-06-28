@@ -1951,10 +1951,63 @@ def _parse_ver(s: str | None) -> tuple | None:
     return tuple(int(x) for x in m.groups()) if m else None
 
 
+def _venv_python_for(script_path: str) -> str | None:
+    """The Python interpreter that owns a console script. uv-tool / pipx / venv
+    installs each live in their OWN environment, so the script sits next to its
+    interpreter (``<env>/bin`` POSIX, ``<env>/Scripts`` Windows) — or names it on
+    the POSIX shebang. Returns None when no sibling interpreter is found."""
+    try:
+        p = Path(script_path).resolve()
+    except Exception:
+        return None
+    bindir = p.parent
+    for cand in ("python", "python3", "python.exe"):
+        cp = bindir / cand
+        if cp.exists():
+            return str(cp)
+    try:  # POSIX: the shebang names the exact interpreter
+        with open(p, "rb") as fh:
+            first = fh.readline(512)
+        if first.startswith(b"#!"):
+            interp = first[2:].strip().split(b" ", 1)[0].decode("utf-8", "replace")
+            if interp and Path(interp).exists():
+                return interp
+    except Exception:
+        pass
+    return None
+
+
+def _isolated_version(binname: str, dist: str) -> str | None:
+    """Version via the binary's OWN interpreter. uv-tool / pipx installs can't be
+    imported by the console's interpreter (separate environments), so probe the
+    environment the launcher actually belongs to. This also doubles as a liveness
+    check: a real isolated install answers, an orphaned launcher does not."""
+    path = shutil.which(binname)
+    if not path:
+        return None
+    py = _venv_python_for(path)
+    if not py:
+        return None
+    try:
+        out = subprocess.run(
+            [py, "-c", f"import importlib.metadata as m;print(m.version({dist!r}))"],
+            capture_output=True, text=True, timeout=12, stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.search(r"\d+\.\d+\.\d+\S*", out.stdout or "")
+    return m.group(0) if m else None
+
+
 def _installed_version(binname: str, dist: str) -> str | None:
-    """Installed version: authoritative `<bin> --version` first, then the
-    package metadata as a fallback (jDoc/jData don't support --version)."""
+    """Installed version, in order of authority: ``<bin> --version`` (jcm), then
+    the binary's own interpreter metadata (uv-tool / pipx isolated installs —
+    jDoc/jData don't support --version), then the console-interpreter metadata
+    (same-interp / editable installs)."""
     v = _cli_version(binname)
+    if v:
+        return v
+    v = _isolated_version(binname, dist)
     if v:
         return v
     try:
@@ -2198,11 +2251,15 @@ def _products_live() -> dict:
     for pid, name, binname, envvar, dist, gh in PRODUCTS:
         installed = _product_installed(binname, dist)
         editable = installed and _is_editable(dist.replace("-", "_"))
+        ver = versions.get(pid) if installed else None
         # Orphaned launcher: the console-script .exe survives on PATH while the
         # package itself is gone from every interpreter (seen 2026-06-12 — the
-        # rail showed a false green while every new spawn died on import).
-        broken = bool(installed and not _dist_present(dist) and shutil.which(binname))
-        ver = versions.get(pid) if installed else None
+        # rail showed a false green while every new spawn died on import). A
+        # resolved version (incl. uv-tool / pipx isolated installs, probed via
+        # the launcher's own interpreter) proves the package is really there, so
+        # only the truly-dead launcher — on PATH, no metadata, no version from
+        # any interpreter — counts as broken.
+        broken = bool(installed and not _dist_present(dist) and shutil.which(binname) and not ver)
         latest = latests.get(pid)
         pv, lv = _parse_ver(ver), _parse_ver(latest)
         # `behind` = a newer release tag exists than what's installed. When the
