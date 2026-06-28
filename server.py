@@ -214,6 +214,10 @@ PRODUCTS = [
     ("jdatamunch", "jDataMunch-MCP", "jdatamunch-mcp", "JDATAMUNCH_LICENSE_KEY", "jdatamunch-mcp", "jgravelle/jdatamunch-mcp"),
 ]
 PRODUCT_IDS = {p[0] for p in PRODUCTS}
+# Only jCodeMunch validates a license key (org-rollup + premium packs). jDoc and
+# jData are free / honor-system — they read no *_LICENSE_KEY and never call
+# validate.php — so the rail shows them "not required", not a missing "none".
+LICENSE_GATED = {"jcodemunch"}
 
 # jDoc/jData have no rich config file like jcm's — they're configured by a few
 # env vars (read across their modules). Rather than tabs over an empty config,
@@ -1551,11 +1555,74 @@ def upgrade(product_id: str) -> dict:
     if not wheel:
         return {"error": "latest release has no .whl asset to install", "_status": 502}
     try:
-        _spawn_terminal(str(Path.home()), [sys.executable, "-m", "pip", "install", "--upgrade", wheel])
+        _spawn_terminal(str(Path.home()), _install_argv(wheel, upgrade=True))
     except Exception as e:
         return {"error": f"could not start upgrade: {e}", "_status": 500}
     _CACHE.pop("products", None)  # status will refresh once pip finishes
     return {"status": "upgrade_started", "product": pid, "wheel": wheel}
+
+
+def _pip_runnable() -> bool:
+    """True if the console's own interpreter can actually run pip. Modern setups
+    ship pip-less interpreters (uv-managed pythons, Ubuntu 26.04 system py3.14),
+    so `sys.executable -m pip` is no longer a safe assumption."""
+    try:
+        import importlib.util
+        return importlib.util.find_spec("pip") is not None
+    except Exception:
+        return False
+
+
+def _install_argv(spec: str, *, upgrade: bool = False, force: bool = False) -> list:
+    """Command to install one suite-product wheel, newest mechanism first:
+    `uv tool install` > `pipx install` > `python -m pip`. uv/pipx give each tool
+    its own isolated environment (which the rail now detects correctly) and run
+    on pip-less interpreters; pip stays as the fallback, with `ensurepip` ahead
+    of it when the interpreter has no pip. Returns one argv, or a list of argvs
+    (ensurepip then pip) that `_spawn_terminal` runs in order."""
+    uv = shutil.which("uv")
+    if uv:
+        cmd = [uv, "tool", "install", spec]
+        if upgrade or force:
+            cmd.append("--force")
+        return cmd
+    pipx = shutil.which("pipx")
+    if pipx:
+        return [pipx, "install", "--force", spec] if (upgrade or force) else [pipx, "install", spec]
+    if force:
+        pip = [sys.executable, "-m", "pip", "install", "--force-reinstall", "--no-deps", spec]
+    elif upgrade:
+        pip = [sys.executable, "-m", "pip", "install", "--upgrade", spec]
+    else:
+        pip = [sys.executable, "-m", "pip", "install", spec]
+    return pip if _pip_runnable() else [[sys.executable, "-m", "ensurepip", "--upgrade"], pip]
+
+
+def _install_all_argv(specs: list) -> list:
+    """Install several product wheels. uv/pipx install one tool per invocation,
+    so fan out to one argv each (run in order in one window); pip takes them all
+    in a single run. Same uv > pipx > pip ordering as `_install_argv`."""
+    uv = shutil.which("uv")
+    if uv:
+        return [[uv, "tool", "install", s] for s in specs]
+    pipx = shutil.which("pipx")
+    if pipx:
+        return [[pipx, "install", s] for s in specs]
+    pip = [sys.executable, "-m", "pip", "install", *specs]
+    return pip if _pip_runnable() else [[sys.executable, "-m", "ensurepip", "--upgrade"], pip]
+
+
+def _uninstall_argv(dist: str) -> list:
+    """Remove one suite product, matching the installer that owns it:
+    `uv tool uninstall` > `pipx uninstall` > `pip uninstall`. The tool name is
+    the distribution name for all three munches."""
+    uv = shutil.which("uv")
+    if uv:
+        return [uv, "tool", "uninstall", dist]
+    pipx = shutil.which("pipx")
+    if pipx:
+        return [pipx, "uninstall", dist]
+    return [sys.executable, "-m", "pip", "uninstall", "-y", dist]
 
 
 def install(product_id: str) -> dict:
@@ -1582,7 +1649,7 @@ def install(product_id: str) -> dict:
     if not wheel:
         return {"error": "latest release has no .whl asset to install", "_status": 502}
     try:
-        _spawn_terminal(str(Path.home()), [sys.executable, "-m", "pip", "install", wheel])
+        _spawn_terminal(str(Path.home()), _install_argv(wheel))
     except Exception as e:
         return {"error": f"could not start install: {e}", "_status": 500}
     _CACHE.pop("products", None)  # status will refresh once pip finishes
@@ -1604,7 +1671,7 @@ def install_all() -> dict:
     if not wheels:
         return {"error": "nothing to install — the whole suite is already present", "_status": 409}
     try:
-        _spawn_terminal(str(Path.home()), [sys.executable, "-m", "pip", "install", *wheels])
+        _spawn_terminal(str(Path.home()), _install_all_argv(wheels))
     except Exception as e:
         return {"error": f"could not start install: {e}", "_status": 500}
     _CACHE.pop("products", None)
@@ -1637,7 +1704,7 @@ def reinstall(product_id: str) -> dict:
     if not wheel:
         return {"error": "latest release has no .whl asset to install", "_status": 502}
     try:
-        _spawn_terminal(str(Path.home()), [sys.executable, "-m", "pip", "install", "--force-reinstall", "--no-deps", wheel])
+        _spawn_terminal(str(Path.home()), _install_argv(wheel, force=True))
     except Exception as e:
         return {"error": f"could not start reinstall: {e}", "_status": 500}
     _CACHE.pop("products", None)
@@ -1660,7 +1727,7 @@ def uninstall(product_id: str) -> dict:
     if _is_editable(dist.replace("-", "_")):
         return {"error": f"{name} is an editable/dev install", "hint": "remove it with git, not pip", "_status": 409}
     try:
-        _spawn_terminal(str(Path.home()), [sys.executable, "-m", "pip", "uninstall", "-y", dist])
+        _spawn_terminal(str(Path.home()), _uninstall_argv(dist))
     except Exception as e:
         return {"error": f"could not start uninstall: {e}", "_status": 500}
     _CACHE.pop("products", None)
@@ -1854,6 +1921,8 @@ def _validate_license(product_id: str, key: str) -> dict:
 
 def _license_state(product_id: str, key: str) -> dict:
     """Resolve a (product, key) to a UI-ready license status block."""
+    if product_id not in LICENSE_GATED:
+        return {"license": "not_required"}
     key = (key or "").strip()
     if not key:
         return {"license": "none"}

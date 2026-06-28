@@ -2046,8 +2046,8 @@ async function renderProducts(fresh = false) {
   ]);
   PRODUCTS = d.products || [];
   OTHER_APPS = oa.apps || [];
-  const dotClass = { valid: "ok", invalid: "bad", entered: "warn", none: "off" };
-  const licText = { valid: "licensed", invalid: "invalid key", entered: "key entered (unverified)", none: "no license key" };
+  const dotClass = { valid: "ok", invalid: "bad", entered: "warn", none: "off", not_required: "off" };
+  const licText = { valid: "licensed", invalid: "invalid key", entered: "key entered (unverified)", none: "no license key", not_required: "license not required (free)" };
   rail.innerHTML =
     `<div class="rail-title"><span><span style="text-transform:none">j</span>Munch, LLC Apps</span>` +
     `<button class="rail-refresh" id="prod-refresh" title="Re-check installs and licenses" aria-label="Refresh product status">↻</button></div>` +
@@ -2384,7 +2384,10 @@ function productMenu(id) {
       enabled ? "" : ` disabled title="${esc(reason)}"`
     }>${esc(label)}</button>`;
   const items = [
-    mi("license", p.license === "none" ? "Enter license key…" : "Change license key…", true, ""),
+    // jDoc/jData aren't license-gated (free) — no key to enter.
+    p.license === "not_required"
+      ? ""
+      : mi("license", p.license === "none" ? "Enter license key…" : "Change license key…", true, ""),
     p.update_available
       ? mi("update", `Update to v${p.latest_version}`, LAUNCH_ENABLED, "read-only mode is on — unset JMUNCH_CONSOLE_READ_ONLY to enable", "menu-item--accent")
       : "",
