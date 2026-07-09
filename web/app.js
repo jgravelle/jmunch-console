@@ -1039,13 +1039,14 @@ function usageModelTable(rows) {
 // Repo + window selection persist across re-renders.
 let DELIVERY_REPO = null;
 let DELIVERY_WINDOW = 30;
+let DELIVERY_UNIT = "durable"; // ROI unit: durable change | merged PR | closed issue
 
 async function renderDelivery() {
   const repoData = await api("/api/repos");
   const repos = (repoData.repos || []).filter((r) => r.has_source);
   let html = head(
     "Productivity",
-    "Cost per durable change: AI spend over a window ÷ the changes that landed and stuck (not reverted or re-touched). Output for outlay, not raw activity.",
+    "Cost per outcome: AI spend over a window ÷ the unit of value it bought. Pick the unit — durable change (git), merged PR or closed issue (GitHub). Output for outlay, not raw activity.",
     repoData._source
   );
   if (!repos.length) {
@@ -1085,9 +1086,20 @@ async function loadDelivery() {
   // (older server) is treated as licensed — never frost then.
   const locked = d.licensed === false;
   const bl = locked ? " lic-blur-val" : "";
+  // ROI by unit: the same attributable spend over the chosen denominator.
+  const units = d.units && d.units.length ? d.units : [{ key: "durable", label: "durable change", count: durable, cost_per: d.cost_per_durable }];
+  const unit = units.find((u) => u.key === DELIVERY_UNIT) || units[0];
+  DELIVERY_UNIT = unit.key;
+  const um = d.units_meta || {};
+  // Unit selector (only when there's more than one to pick from).
+  const unitSel = units.length > 1
+    ? `<label class="idx-ctl">cost per <select id="dlv-unit" class="idx-select">${
+        units.map((u) => `<option value="${esc(u.key)}"${u.key === DELIVERY_UNIT ? " selected" : ""}>${esc(u.label)}</option>`).join("")
+      }</select></label>`
+    : "";
   const headlineTile = attributable
-    ? ["Cost per durable change", d.cost_per_durable == null ? "n/a" : money(d.cost_per_durable), `${money(d.cost_usd)} spend / ${fmt(durable)} durable`]
-    : ["Durable changes", fmt(durable), `landed & stuck · last ${m.window_days}d`];
+    ? [`Cost per ${unit.label}`, unit.cost_per == null ? "n/a" : money(unit.cost_per), `${money(d.cost_usd)} spend / ${fmt(unit.count)} ${esc(unit.label)}${unit.count === 1 ? "" : "s"}`]
+    : [`${unit.label.charAt(0).toUpperCase()}${unit.label.slice(1)}s`, fmt(unit.count), `landed this window · last ${m.window_days}d`];
   const tiles = [
     headlineTile,
     ["Durable rate", Math.round((m.durable_rate || 0) * 100) + "%", `${fmt(durable)} of ${fmt(m.commits_total)} commits`],
@@ -1108,17 +1120,35 @@ async function loadDelivery() {
   const provNote = prov ? ` <span class="muted">${fmt(prov)} too recent to be final (under the ${m.rework_horizon_days}d horizon).</span>` : "";
   const costNote = attributable ? "" : `<div class="muted" style="margin-top:var(--sp-2)">${esc(d.cost_hint || "")}</div>`;
 
+  // By-unit comparison: same spend, three denominators (Guercio's dashboard).
+  const unitRows = units.map((u) =>
+    `<tr${u.key === DELIVERY_UNIT ? ' class="unit-active"' : ""}><td>${esc(u.label)}</td><td class="num${bl}">${fmt(u.count)}</td><td class="num${bl}">${attributable && u.cost_per != null ? money(u.cost_per) : "—"}</td><td class="muted">${esc(u.source || "")}</td></tr>`
+  ).join("");
+  const unitsTable = `<table class="grid-tbl"><thead><tr><th>unit</th><th class="num">count</th><th class="num">cost / unit</th><th>source</th></tr></thead><tbody>${unitRows}</tbody></table>`;
+  // Degrade note when the GitHub units are unavailable (no gh / not authed / no remote).
+  const ghHint = !um.gh_available
+    ? "Install the GitHub CLI (gh) and run gh auth login to add cost per merged PR and closed issue."
+    : (um.reason || "");
+  const ghNote = (units.length <= 1 && ghHint)
+    ? `<div class="muted" style="margin-top:var(--sp-2);font-size:var(--fs-xs)">${esc(ghHint)}</div>` : "";
+
   body.innerHTML =
+    (unitSel ? `<div class="row" style="margin-bottom:var(--sp-3)">${unitSel}</div>` : "") +
     `<div class="kpis">${tiles}</div>` +
+    `<div class="section-title">ROI by unit</div>` + unitsTable + ghNote +
     `<div class="section-title">${attributable ? "Cost per durable change over time" : "Durable changes over time"}</div>` +
     // Unlicensed: the CTA displaces the trend chart, mirroring the Savings panel.
     (locked
       ? `<div class="lic-cta-block">(enter a valid license # in jMunch, LLC Apps to view)</div>`
       : deliverySpark(d.series || [], attributable)) +
+    `<div class="muted" style="margin-top:2px;font-size:var(--fs-xs)">Trend tracks durable changes only (the daily series the console records); the PR/issue units are point-in-time.</div>` +
     `<div class="section-title">Durable work by kind</div>` + catRows +
     `<div class="muted${bl}" style="margin-top:var(--sp-3)">${esc(m.assessment || "")}${provNote}</div>` +
     costNote +
-    `<div class="muted" style="margin-top:var(--sp-2);font-size:var(--fs-xs)">Diagnostic trend, not a score to chase. Rework excludes <span class="${locked ? "lic-blur-val" : ""}">${fmt(meta.hub_files_excluded)}</span> churn-hub file(s); durability is trailing; cost attribution is approximate.</div>`;
+    `<div class="muted" style="margin-top:var(--sp-2);font-size:var(--fs-xs)">Diagnostic trend, not a score to chase. Rework excludes <span class="${locked ? "lic-blur-val" : ""}">${fmt(meta.hub_files_excluded)}</span> churn-hub file(s); durability is trailing; cost attribution is approximate. PR/issue counts are per-window GitHub totals ÷ the same repo spend — an average, not per-unit attribution.</div>`;
+
+  const unitPick = document.getElementById("dlv-unit");
+  if (unitPick) unitPick.onchange = (e) => { DELIVERY_UNIT = e.target.value; loadDelivery(); };
 }
 
 // History bars over this repo's daily series. The keyed metric is cost-per-durable

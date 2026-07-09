@@ -132,19 +132,30 @@ sources:
 
 ### Productivity
 
-Cost per *durable* change: the AI spend attributable to a repo divided by the
-work that actually stuck (durable vs reverted/reworked commits), so volume-gaming
-is self-defeating rather than rewarded.
+Cost per *outcome*: the AI spend attributable to a repo divided by the unit of
+value it bought. The same dollars, measured against whichever unit matters to you
+— so volume-gaming is self-defeating rather than rewarded.
 
 **How to:**
 - Pick a **repo** and a **window** (14 / 30 / 90 days).
-- The headline tile is cost-per-durable-change when spend is attributable, else
-  the durable-change count, with rework-rate and a by-kind breakdown.
+- Pick the **unit** with the "cost per" selector:
+  - **durable change** — commits that landed and stuck (not reverted/re-touched),
+    from local git via jCodeMunch. Always available.
+  - **merged PR** and **closed issue** — from GitHub via the `gh` CLI, shown when
+    the repo has a GitHub remote and `gh` is installed and authenticated
+    (`gh auth login`). Without it, only the durable-change unit shows.
+- The **ROI by unit** table compares all available units side by side (count and
+  cost each), so you can see what a durable change, a PR, and an issue each cost.
 
 > Attribution honesty: if you run sessions from a parent ("umbrella") folder that
 > contains many repos, per-repo cost can't always be split and the tile says
 > **"not attributable"** rather than a misleading `$0`. Launching a session at
 > the repo root (the Launch screen does this) makes the cost overlay light up.
+>
+> The PR/issue numbers are per-window GitHub totals divided by the same repo
+> spend — an *average* cost per unit, not per-PR attribution. The trend chart
+> tracks durable changes only (the daily series the console records); PR/issue
+> counts are point-in-time.
 ---
 
 ### Sessions

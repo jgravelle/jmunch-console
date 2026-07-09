@@ -525,3 +525,7 @@ body.busy::after {
 .rail-roi-label { color: var(--accent-contrast); background: var(--accent); border-radius: 4px; padding: 0 5px; font-size: var(--fs-2xs, 10px); font-weight: var(--fw-bold); letter-spacing: 0.04em; }
 .rail-roi-val { color: var(--accent); font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: var(--fw-bold); }
 .rail-roi-muted { color: var(--text-faint) !important; font-weight: var(--fw-medium); font-family: inherit; }
+
+/* ROI-by-unit comparison table: highlight the row matching the selected unit */
+.grid-tbl tr.unit-active td { background: var(--accent-soft, rgba(76, 194, 168, 0.10)); font-weight: var(--fw-medium); }
+.grid-tbl tr.unit-active td:first-child { box-shadow: inset 3px 0 0 var(--accent); }

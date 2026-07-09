@@ -3693,10 +3693,81 @@ def _repo_picklist(rows: list) -> list:
              "has_source": r.get("has_source")} for r in rows]
 
 
+def _run_exec(argv: list, timeout: int = 25) -> str | None:
+    """Run an arbitrary local executable (git / gh) and return UTF-8-decoded
+    stdout, or None on any failure. NOT MCP_BIN-prefixed — this is the console's
+    own git/gh probe path, kept separate from the jcm CLI. Decoded as explicit
+    UTF-8 (not text=True) so Windows cp1252 can't mangle unicode in output."""
+    if FORCE_FIXTURES:
+        return None
+    try:
+        out = subprocess.run(argv, capture_output=True, timeout=timeout,
+                             stdin=subprocess.DEVNULL)
+        if out.returncode != 0:
+            return None
+        return out.stdout.decode("utf-8", "replace")
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _repo_github_slug(source_root: str):
+    """`owner/repo` from the repo's `origin` remote, or None (no remote, not a
+    GitHub URL, or git absent). A local git call — no network, honors the same
+    'the console shells CLIs, jcm stays offline' split as the rest of ROI."""
+    if not source_root:
+        return None
+    url = _run_exec(["git", "-C", source_root, "remote", "get-url", "origin"], timeout=10)
+    if not url or "github.com" not in url:
+        return None
+    tail = re.split(r"github\.com[:/]", url.strip(), maxsplit=1)
+    if len(tail) < 2:
+        return None
+    parts = tail[1].strip().removesuffix(".git").strip("/").split("/")
+    return "%s/%s" % (parts[0], parts[1]) if len(parts) >= 2 and parts[0] and parts[1] else None
+
+
+def _gh_count(slug: str, kind: str, window_days: int):
+    """Count merged PRs (`kind='pr'`) or closed issues (`kind='issue'`) on a
+    GitHub repo within the window, via `gh`. int, or None if gh is missing / not
+    authenticated / the API errored. Capped at 1000 (the `--limit`)."""
+    since = (datetime.date.today() - datetime.timedelta(days=window_days)).isoformat()
+    state = "merged" if kind == "pr" else "closed"
+    search = ("merged:>=%s" if kind == "pr" else "closed:>=%s") % since
+    out = _run_exec(["gh", kind, "list", "-R", slug, "--state", state,
+                     "--search", search, "--limit", "1000", "--json", "number"], timeout=25)
+    if out is None:
+        return None
+    try:
+        data = json.loads(out)
+    except ValueError:
+        return None
+    return len(data) if isinstance(data, list) else None
+
+
+def _gh_unit_counts(slug: str, window_days: int) -> dict:
+    """Merged-PR + closed-issue counts for a GitHub repo/window, cached 10 min
+    (they're network calls). Degrades honestly when gh is absent/unauthed."""
+    if not shutil.which("gh"):
+        return {"gh_available": False, "reason": "GitHub CLI (gh) not installed"}
+
+    def compute():
+        prs = _gh_count(slug, "pr", window_days)
+        issues = _gh_count(slug, "issue", window_days)
+        if prs is None and issues is None:
+            return {"gh_available": True,
+                    "reason": "gh returned no data (run `gh auth login`, or the repo isn't on GitHub)"}
+        return {"gh_available": True, "merged_prs": prs, "closed_issues": issues, "reason": ""}
+
+    return _cached("ghunits_%s_%d" % (slug, window_days), 600.0, compute)
+
+
 def delivery_panel(repo_id: str, window_raw) -> dict:
     """Cost-per-outcome panel: join jcm `delivery` durable-change counts with the
-    AI spend attributable to the repo over the same window. Read-only.
-    Requires jcodemunch-mcp >= 1.108.69 (the `delivery` subcommand)."""
+    AI spend attributable to the repo over the same window. Also reports ROI by
+    other units of value (merged PR, closed issue) via `gh` when the repo is on
+    GitHub — the SAME attributable spend over a different denominator. Read-only.
+    Requires jcodemunch-mcp >= 1.108.69 (the `delivery` subcommand); the PR/issue
+    units additionally need `gh` installed + authenticated."""
     window_days = _clamp_window(window_raw)
     rd = repos()
     rows = rd.get("repos") or []
@@ -3736,10 +3807,33 @@ def delivery_panel(repo_id: str, window_raw) -> dict:
         "cost_usd": cost["cost_usd"] if attributable else None,
         "cost_per_durable": cpd,
     })
+    # ROI by unit (Guercio, "whatever unit matters"): the SAME attributable repo
+    # spend measured against different units of value. Durable commits come from
+    # jcm (local git); merged PRs + closed issues come from `gh` (GitHub) — jcm is
+    # never asked for them, keeping its offline/local charter intact.
+    def _cost_per(count):
+        return round(cost["cost_usd"] / count, 4) if (attributable and count and count > 0) else None
+    units = [{"key": "durable", "label": "durable change", "count": durable,
+              "cost_per": cpd, "source": "git (jcm delivery)"}]
+    slug = _repo_github_slug(source_root)
+    gh = _gh_unit_counts(slug, window_days) if slug else {
+        "gh_available": bool(shutil.which("gh")),
+        "reason": "this repo has no GitHub `origin` remote"}
+    if slug and gh.get("gh_available") and not gh.get("reason"):
+        if gh.get("merged_prs") is not None:
+            units.append({"key": "pr", "label": "merged PR", "count": gh["merged_prs"],
+                          "cost_per": _cost_per(gh["merged_prs"]), "source": "GitHub (%s)" % slug})
+        if gh.get("closed_issues") is not None:
+            units.append({"key": "issue", "label": "closed issue", "count": gh["closed_issues"],
+                          "cost_per": _cost_per(gh["closed_issues"]), "source": "GitHub (%s)" % slug})
     return _tag({**base, "available": True, "metrics": metrics,
                  "cost_usd": cost["cost_usd"], "cost_attribution": cost,
                  "cost_attributable": attributable, "cost_hint": cost_hint,
                  "cost_per_durable": cpd, "series": series,
+                 "units": units,
+                 "units_meta": {"github_slug": slug,
+                                "gh_available": gh.get("gh_available", False),
+                                "reason": gh.get("reason", "")},
                  # Soft gate: the UI frosts every numeric value (labels stay) and
                  # swaps the chart for a CTA when no valid suite license is on file.
                  "licensed": _any_valid_license()}, "live")
