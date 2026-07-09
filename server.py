@@ -3750,7 +3750,7 @@ def delivery_panel(repo_id: str, window_raw) -> dict:
 # nothing else - it reads the real code on the machine but never edits or runs.
 # The user's own MCP servers are suppressed (empty --mcp-config + strict) to
 # keep each turn cheap and deterministic. We deliberately do NOT load
-# jCodeMunch-MCP live: a single MCP server injects its whole ~150-tool surface
+# jCodeMunch-MCP live: a single MCP server injects its whole ~90-tool surface
 # into context every turn, which cost MORE than reading files natively and
 # confused tool selection. The Build mode that implements features and opens
 # PRs is a deliberate future phase.

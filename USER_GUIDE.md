@@ -263,6 +263,14 @@ runs commands, or changes your setup.
 > future Build mode will be able to implement a requested feature into your own
 > installation and help you share it back as a pull request.
 
+**Note on scope:** the console is a control plane for installing, configuring, and
+watching the suite. jCodeMunch-MCP itself keeps gaining read-only analysis tools
+that live in your coding agent, not on a console screen; recent additions include
+migration parity mapping (`get_parity_map`), a decorator/annotation census
+(`get_decorator_census`), and structural architecture metrics
+(`get_architecture_metrics`). You call those from your IDE or agent against an
+indexed repo; the console doesn't drive them, and you don't need it to.
+
 ---
 
 ### Config
