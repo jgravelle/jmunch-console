@@ -226,6 +226,9 @@ SIBLING_SETTINGS = {
             ("embedding_provider", "JDOCMUNCH_EMBEDDING_PROVIDER", "(auto-detect)", "gemini / openai / openai-compatible / sentence-transformers"),
             ("summarizer_provider", "JDOCMUNCH_SUMMARIZER_PROVIDER", "(auto-detect)", "anthropic / gemini / openai / minimax / glm / none"),
             ("git_timeout", "JDOCMUNCH_GIT_TIMEOUT", "10", "Git probe timeout (s) for repo@sha certification; <=0 disables"),
+            ("hook_debounce_seconds", "JDOCMUNCH_HOOK_DEBOUNCE_SECONDS", "3", "Auto-reindex hook: per-file leading-edge debounce (coalesces rapid edits) [1.94.0+]"),
+            ("hook_max_reindex", "JDOCMUNCH_HOOK_MAX_REINDEX", "2", "Auto-reindex hook: max concurrent reindex workers (cross-process slot cap) [1.94.0+]"),
+            ("hook_log", "JDOCMUNCH_HOOK_LOG", "0 (off)", "Auto-reindex hook: 1 writes a breadcrumb log to _hooks/reindex.log [1.94.0+]"),
         ],
     },
     "jDataMunch-MCP": {

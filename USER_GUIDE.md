@@ -287,7 +287,12 @@ Reached via the **gear** in the top bar. Three groups:
    confusion is obvious. Editable when actions are enabled; writes go to the
    global `config.jsonc` (a project's `.jcodemunch.jsonc` can still override).
 3. **Sibling MCPs**: jDoc and jData's environment-driven settings, shown
-   read-only for reference.
+   read-only for reference. On `jdocmunch-mcp` 1.94.0+ this includes the
+   auto-reindex hook throttle knobs (`JDOCMUNCH_HOOK_DEBOUNCE_SECONDS`,
+   `JDOCMUNCH_HOOK_MAX_REINDEX`, `JDOCMUNCH_HOOK_LOG`), added after a
+   large-corpus crash report to bound the reindex fan-out on bursty edits. Both
+   siblings also carry `readOnlyHint` annotations now (jDoc 1.93.0+, jData
+   1.17.0+), so Claude Code plan mode runs their read tools without prompting.
 
 The Config screen also holds the **Console process** controls (restart / stop);
 see [Stopping and restarting the console](#stopping-and-restarting-the-console).
