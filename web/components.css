@@ -500,3 +500,28 @@ body.busy::after {
 .logline--warn { color: var(--warning); }
 .logline--info { color: var(--text-muted); }
 .logcard-path { padding: var(--sp-1) var(--sp-3); color: var(--text-faint); font-size: var(--fs-xs); border-top: 1px solid var(--border); word-break: break-all; }
+
+/* ROI hero (Savings screen) — the outcome the token tiles below are inputs to */
+.roi-hero {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-4);
+  flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--accent); border-radius: var(--radius-md);
+  border-left: 3px solid var(--accent);
+  padding: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-4);
+}
+.roi-label { color: var(--text-muted); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; }
+.roi-tag { color: var(--accent-contrast); background: var(--accent); border-radius: 4px; padding: 0 6px; font-weight: var(--fw-bold); font-size: var(--fs-2xs, 10px); letter-spacing: 0.04em; margin-left: var(--sp-1); }
+.roi-value { font-size: var(--fs-2xl); font-weight: var(--fw-bold); font-family: var(--font-mono); letter-spacing: -0.02em; color: var(--accent); margin-top: var(--sp-1); }
+.roi-inputs { color: var(--text-faint); font-size: var(--fs-xs); margin-top: 2px; }
+.roi-muted { color: var(--text-faint); }
+.roi-note { color: var(--text-faint); font-size: var(--fs-xs); text-align: right; max-width: 40%; }
+
+/* ROI line in the sidebar rail */
+.rail-roi {
+  display: flex; align-items: baseline; gap: var(--sp-2);
+  padding: 0 var(--sp-3) var(--sp-3); text-decoration: none; color: inherit;
+}
+.rail-roi:hover .rail-roi-val { color: var(--accent-hover); }
+.rail-roi-label { color: var(--accent-contrast); background: var(--accent); border-radius: 4px; padding: 0 5px; font-size: var(--fs-2xs, 10px); font-weight: var(--fw-bold); letter-spacing: 0.04em; }
+.rail-roi-val { color: var(--accent); font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: var(--fw-bold); }
+.rail-roi-muted { color: var(--text-faint) !important; font-weight: var(--fw-medium); font-family: inherit; }

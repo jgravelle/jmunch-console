@@ -3745,6 +3745,117 @@ def delivery_panel(repo_id: str, window_raw) -> dict:
                  "licensed": _any_valid_license()}, "live")
 
 
+def _spend_by_repo(window_days: int) -> dict:
+    """One pass over all transcripts, attributing each assistant message's spend
+    to the repo it TOUCHED (carry-forward within a session, cwd-seeded) and
+    bucketing by repo_id. Returns {repo_id: {cost_usd, message_events,
+    matched_sessions}}. The single-sweep sibling of `_delivery_cost` so the
+    suite-wide ROI roll-up doesn't re-scan the transcripts once per repo."""
+    roots, id_to_root = _repo_roots()
+    root_to_id = {root: rid for root, rid in roots}
+    proot = Path(os.path.expanduser(
+        os.environ.get("CLAUDE_PROJECTS_DIR", "~/.claude/projects")))
+    cut = time.time() - window_days * 86400
+    by_id: dict = {}
+    try:
+        for jf in proot.glob("*/*.jsonl"):
+            try:
+                if jf.stat().st_mtime < cut:
+                    continue
+            except OSError:
+                continue
+            recs, cwd = _attr_parse_cached(jf)
+            current = _resolve_root(cwd, roots, id_to_root) if cwd else None
+            session_roots: set = set()
+            for ev in recs:
+                if ev[0] < cut:
+                    continue
+                mr = _dominant_root(ev[6], roots, id_to_root)
+                if mr:
+                    current = mr
+                rid = root_to_id.get(current) if current else None
+                if not rid:
+                    continue
+                d = by_id.setdefault(
+                    rid, {"cost_usd": 0.0, "message_events": 0, "matched_sessions": 0})
+                d["cost_usd"] += _usage_usd(ev[1], {
+                    "input": ev[2], "output": ev[3],
+                    "cache_read": ev[4], "cache_creation": ev[5],
+                })
+                d["message_events"] += 1
+                session_roots.add(rid)
+            for rid in session_roots:
+                by_id[rid]["matched_sessions"] += 1
+    except OSError:
+        pass
+    for d in by_id.values():
+        d["cost_usd"] = round(d["cost_usd"], 4)
+    return by_id
+
+
+def _roi_summary(window_days: int) -> dict:
+    """Suite-wide ROI: aggregate cost-per-durable-change across every indexed repo
+    that had attributable AI spend in the window. The console's headline answer to
+    'ROI-maxing, not token-maxing' — dollars spent per change that landed and
+    stuck, not tokens burned. Read-only; the durable counts need jcm >= 1.108.69
+    (the `delivery` subcommand), and we only shell it for repos that actually saw
+    spend, so the cost is bounded by how many repos were worked in, not the whole
+    index."""
+    rd = repos()
+    rows = [r for r in (rd.get("repos") or []) if r.get("has_source")]
+    id_row = {r.get("repo_id"): r for r in rows}
+    spend = _spend_by_repo(window_days)
+    total_cost = 0.0
+    total_durable = 0
+    contributors = []
+    for rid, sp in spend.items():
+        row = id_row.get(rid)
+        if not row or sp.get("matched_sessions", 0) <= 0:
+            continue
+        m = _run_cli_json(["delivery", row.get("source_root") or "",
+                           "--window-days", str(window_days), "--json"])
+        if m.get("error"):
+            continue
+        durable = int(m.get("commits_durable") or 0)
+        if durable <= 0:
+            continue
+        total_cost += sp["cost_usd"]
+        total_durable += durable
+        contributors.append({
+            "repo_id": rid, "display_name": row.get("display_name"),
+            "cost_usd": round(sp["cost_usd"], 4), "durable": durable,
+            "cost_per_durable": round(sp["cost_usd"] / durable, 4),
+        })
+    contributors.sort(key=lambda c: c["cost_usd"], reverse=True)
+    cpd = round(total_cost / total_durable, 4) if total_durable > 0 else None
+    return _tag({
+        "available": True,
+        "window_days": window_days,
+        "window_choices": list(_DELIVERY_WIN_CHOICES),
+        "cost_per_durable": cpd,
+        "total_cost_usd": round(total_cost, 4),
+        "total_durable": total_durable,
+        "contributor_count": len(contributors),
+        "contributors": contributors[:5],
+        "attributable": cpd is not None,
+        "hint": "" if cpd is not None else (
+            "No durable changes with attributable AI spend in this window yet. "
+            "ROI lights up once Claude Code sessions work in an indexed repo and "
+            "changes land (see the Productivity screen for the per-repo view)."
+        ),
+    }, rd.get("_source", "live"))
+
+
+def roi_panel(window_raw) -> dict:
+    """Cached suite-wide ROI roll-up. The delivery CLI walks git per active repo,
+    so the whole summary is cached 5 min per window; the sidebar rail and Savings
+    header both read it without re-paying the walk on every poll."""
+    if FORCE_FIXTURES:
+        return _tag(_fixture("roi"), "fixture")
+    window_days = _clamp_window(window_raw)
+    return _cached("roi_%d" % window_days, 300.0, lambda: _roi_summary(window_days))
+
+
 # --------------------------------------------------------------------------- #
 # Help chat: a read-only "Ask" bot grounded in the user's own installed source.
 # It shells out to their `claude` CLI in headless print mode, so the console
@@ -3882,6 +3993,7 @@ _API = {
     "/api/savings/live": lambda q: savings_live(),
     "/api/usage": lambda q: usage_panel(),
     "/api/delivery": lambda q: delivery_panel((q.get("repo") or [""])[0], (q.get("window") or ["30"])[0]),
+    "/api/roi": lambda q: roi_panel((q.get("window") or ["30"])[0]),
     "/api/other-apps": lambda q: other_apps(fresh=bool((q.get("fresh") or [""])[0])),
     "/api/starter-packs": lambda q: starter_packs(fresh=bool((q.get("fresh") or [""])[0])),
     "/api/sessions": lambda q: sessions(),

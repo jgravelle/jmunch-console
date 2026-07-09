@@ -92,10 +92,20 @@ What the suite has saved you by returning compact, ranked results instead of raw
 file bytes.
 
 **How to read it:**
+- **ROI hero (top):** **cost per durable change** across the whole suite — the AI
+  spend that landed changes divided by the changes that stuck. This is the
+  outcome; the token tiles below it are the *inputs*. It's the "ROI, not tokens"
+  number a finance team actually wants (tokens saved is a means, not the goal).
+  Shows "not yet attributable" until Claude Code sessions work in an indexed repo
+  and changes land. The same number appears as an **ROI** line in the sidebar rail,
+  linking here.
 - **Headline tiles:** tokens and dollars saved over the last 30 days, plus
   all-time totals (the all-time tiles tick up live as the suite serves calls).
 - **By tool:** a per-tool breakdown of where the savings came from.
 - **Trend:** a rolling 30-day chart the console accumulates day by day.
+
+For the per-repo view of the same metric (plus rework rate and by-kind
+breakdown), see the [Productivity](#productivity) screen.
 
 The per-tool table past the first row is part of the [license soft-gate](#licensing-and-the-soft-gate);
 enter a valid key to reveal it in full.

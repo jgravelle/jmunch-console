@@ -840,8 +840,29 @@ function sparkbars(series) {
     <div class="row" style="justify-content:space-between"><span class="muted mono" style="font-size:var(--fs-xs)">${esc(first)}</span><span class="muted mono" style="font-size:var(--fs-xs)">${esc(last)}</span></div>`;
 }
 
+// ROI hero: the outcome the token meters below are inputs to. Cost per durable
+// change = dollars spent ÷ changes that landed and stuck. Guercio's "ROI-maxing
+// not token-maxing" made concrete — the number a finance team actually wants.
+function roiHero(roi, s) {
+  const r = roi || {};
+  const cpd = r.cost_per_durable == null ? "n/a" : money(r.cost_per_durable);
+  const savedTok = s.tokens_saved_30d == null ? "n/a" : fullNum(s.tokens_saved_30d);
+  const spend = r.total_cost_usd == null ? "n/a" : money(r.total_cost_usd);
+  const note = r.attributable
+    ? `${fmt(r.total_durable)} durable change${r.total_durable === 1 ? "" : "s"} across ${fmt(r.contributor_count)} repo${r.contributor_count === 1 ? "" : "s"} · last ${fmt(r.window_days)}d`
+    : (r.hint || "not yet attributable — work in an indexed repo and let changes land");
+  return `<div class="roi-hero" title="Cost per durable change: dollars spent per change that landed and stuck. ROI, not tokens.">
+      <div class="roi-hero-main">
+        <div class="roi-label">Cost per durable change <span class="roi-tag">ROI</span></div>
+        <div class="roi-value">${esc(cpd)}</div>
+        <div class="roi-inputs">&larr; ${esc(savedTok)} tokens saved · ${esc(spend)} spend <span class="roi-muted">(inputs)</span></div>
+      </div>
+      <div class="roi-note">${esc(note)}</div>
+    </div>`;
+}
+
 async function renderSavings() {
-  const d = await api("/api/savings");
+  const [d, roi] = await Promise.all([api("/api/savings"), api("/api/roi")]);
   const s = d.savings || {};
   const total = s.tokens_saved_total == null ? "n/a" : fullNum(s.tokens_saved_total);
   const usdTotal = s.usd_saved_total == null ? "n/a" : money(s.usd_saved_total);
@@ -884,6 +905,8 @@ async function renderSavings() {
   }
   view.innerHTML =
     head("Savings", "Tokens and dollars saved by jCodeMunch MCP tool calls, modeled from your Claude transcripts. Plain edits, shell, and other tools don't register here.", d._source) +
+    roiHero(roi, s) +
+    `<div class="section-title">Inputs — tokens &amp; spend</div>` +
     `<div class="kpis">${tiles}</div>` +
     `<div class="section-title">Rolling 30-day savings</div>` +
     // Unlicensed: the CTA displaces the bar graph; the per-tool table below
@@ -2052,6 +2075,10 @@ async function renderProducts(fresh = false) {
     `<div class="rail-title"><span><span style="text-transform:none">j</span>Munch, LLC Apps</span>` +
     `<button class="rail-refresh" id="prod-refresh" title="Re-check installs and licenses" aria-label="Refresh product status">↻</button></div>` +
     railSummary(d.products || []) +
+    // ROI at a glance, filled in async by loadRailRoi() so the (heavier)
+    // suite-wide delivery walk never blocks the rail render.
+    `<a class="rail-roi" id="rail-roi" href="#savings" title="Cost per durable change across the suite — ROI, not tokens saved">` +
+    `<span class="rail-roi-label">ROI</span><span class="rail-roi-val" id="rail-roi-val">…</span></a>` +
     (d.products || [])
       .map((p) => {
         const lic = dotClass[p.license] || "off";
@@ -2151,6 +2178,28 @@ async function renderProducts(fresh = false) {
       refresh.classList.add("spin");
       renderProducts(true);
     };
+  loadRailRoi();
+}
+
+// Fill the rail's ROI line after the rail has already rendered — the suite-wide
+// cost-per-durable roll-up shells the delivery walk per active repo, so it's
+// slower than the products probe and must never gate the rail. Cached 5 min
+// server-side, so this is cheap on every poll after the first.
+async function loadRailRoi() {
+  const el = document.getElementById("rail-roi-val");
+  if (!el) return;
+  try {
+    const r = await api("/api/roi");
+    if (r && r.attributable && r.cost_per_durable != null) {
+      el.textContent = `${money(r.cost_per_durable)}/change`;
+      el.title = `${money(r.total_cost_usd)} spend ÷ ${fmt(r.total_durable)} durable changes · ${fmt(r.window_days)}d`;
+    } else {
+      el.textContent = "not yet attributable";
+      el.classList.add("rail-roi-muted");
+    }
+  } catch (_e) {
+    el.textContent = "—";
+  }
 }
 
 // ---- Compatible Apps lifecycle (third-party; everything products get, minus licensing)
