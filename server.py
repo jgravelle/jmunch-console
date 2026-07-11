@@ -46,6 +46,7 @@ FIXTURES = ROOT / "fixtures"
 DATA = ROOT / "data"
 HISTORY = DATA / "savings_history.json"
 DELIVERY_HISTORY = DATA / "delivery_history.json"
+USAGE_HISTORY = DATA / "usage_history.json"
 CONSOLE_SETTINGS = DATA / "console_settings.json"
 
 
@@ -3175,8 +3176,8 @@ def usage_panel() -> dict:
 # supplies code to run. Same posture as config_set's key allowlist. Evaluating
 # an alert reads existing data functions and compares a number: it acts on
 # nothing in the suite, so (like console_set) it is deliberately NOT
-# ALLOW_LAUNCH-gated. Four alerts ship ON with sane defaults so the tab is
-# useful with zero configuration; two advanced ones ship OFF behind a drawer.
+# ALLOW_LAUNCH-gated. Five alerts ship ON with sane defaults so the tab is
+# useful with zero configuration; three advanced ones ship OFF behind a drawer.
 # --------------------------------------------------------------------------- #
 
 # Each entry: metric (key into _alert_metrics), unit (formats the value + keeps
@@ -3198,12 +3199,21 @@ _ALERT_CATALOG = [
     {"id": "log_errors", "label": "Errors in logs", "metric": "error_lines",
      "unit": "count", "compare": "gt", "default": 5, "enabled": True, "tier": "default",
      "desc": "Error lines in the recent tail of the jCodeMunch logs."},
+    {"id": "daily_cost_ratio", "label": "Daily spend vs normal", "metric": "day_usd_ratio",
+     "unit": "x", "compare": "gt", "default": 3.0, "enabled": True, "tier": "default",
+     "desc": "Today's local spend against the median of your recent days. Fires when it runs "
+             "well above your own normal — the drift fixed dollar limits miss (an expensive mode "
+             "left on, a runaway session). Silent until a few days of history build up; no number to set."},
     {"id": "server_idle", "label": "Server went quiet", "metric": "idle_min",
      "unit": "min", "compare": "gt", "default": 30.0, "enabled": False, "tier": "advanced",
      "desc": "Minutes since jCodeMunch last served a tool call (needs a running server)."},
     {"id": "weekly_cost", "label": "Weekly org cost", "metric": "week_usd",
      "unit": "usd", "compare": "gt", "default": 100.0, "enabled": False, "tier": "advanced",
      "desc": "Org-wide spend over the last 7 days (needs a CLAUDE_ADMIN_KEY)."},
+    {"id": "daily_tokens_ratio", "label": "Daily tokens vs normal", "metric": "day_tokens_ratio",
+     "unit": "x", "compare": "gt", "default": 3.0, "enabled": False, "tier": "advanced",
+     "desc": "Today's new-token burn against your recent-day median — the token-side companion to "
+             "the spend baseline. Off by default to avoid double-signalling; same silent-until-ready behavior."},
 ]
 _ALERT_BY_ID = {a["id"]: a for a in _ALERT_CATALOG}
 
@@ -3225,6 +3235,55 @@ def _burn_tok(d) -> int:
                + (d.get("cache_creation") or 0))
 
 
+def _record_usage_history(usd, tokens) -> list[dict]:
+    """Append today's local 24h spend + new-token burn to a Console-owned daily
+    book (one point/day, today updated in place, capped 90d) so the baseline
+    alerts have a trailing median to compare against. Mirrors _record_history —
+    the panels expose only rolling snapshots, never a daily series. Best-effort,
+    never raises."""
+    today = datetime.date.today().isoformat()
+    points: list[dict] = []
+    try:
+        if USAGE_HISTORY.exists():
+            points = json.loads(USAGE_HISTORY.read_text(encoding="utf-8")).get("points", [])
+    except (OSError, ValueError):
+        points = []
+    snap = {"date": today, "usd": round(float(usd or 0.0), 4), "tokens": int(tokens or 0)}
+    if points and points[-1].get("date") == today:
+        points[-1] = snap
+    else:
+        points.append(snap)
+    points = points[-90:]
+    try:
+        DATA.mkdir(exist_ok=True)
+        USAGE_HISTORY.write_text(json.dumps({"points": points}), encoding="utf-8")
+    except OSError:
+        pass
+    return points
+
+
+def _baseline_ratio(current, points, field, min_days: int = 3):
+    """current ÷ median of the last min_days-or-more PRIOR days (today excluded)
+    for `field` in the usage-history points. None when there isn't enough history
+    yet or the baseline is degenerate (median <= 0) — so a fresh install renders
+    'no data', never a false breach, and lights up on its own once a few days
+    accrue. This is what makes the baseline alerts need zero configuration."""
+    if current is None:
+        return None
+    today = datetime.date.today().isoformat()
+    prior = [p.get(field) for p in points
+             if p.get("date") != today and isinstance(p.get(field), (int, float))
+             and not isinstance(p.get(field), bool)]
+    if len(prior) < min_days:
+        return None
+    prior.sort()
+    n = len(prior)
+    med = prior[n // 2] if n % 2 else (prior[n // 2 - 1] + prior[n // 2]) / 2.0
+    if med <= 0:
+        return None
+    return round(float(current) / med, 2)
+
+
 def _alert_metrics() -> dict:
     """Current value for every alert metric, gathered once per poll. A value of
     None means the signal isn't available right now (no transcripts yet, no admin
@@ -3241,8 +3300,12 @@ def _alert_metrics() -> dict:
         m["day_usd"] = float(local.get("day_usd") or 0.0)
         m["day_tokens"] = _burn_tok(local.get("day"))
         m["hour_tokens"] = _burn_tok(local.get("hour"))
+        pts = _record_usage_history(m["day_usd"], m["day_tokens"])
+        m["day_usd_ratio"] = _baseline_ratio(m["day_usd"], pts, "usd")
+        m["day_tokens_ratio"] = _baseline_ratio(m["day_tokens"], pts, "tokens")
     else:
         m["day_usd"] = m["day_tokens"] = m["hour_tokens"] = None
+        m["day_usd_ratio"] = m["day_tokens_ratio"] = None
     m["week_usd"] = (float(cost["week_usd"]) if cost.get("available")
                      and cost.get("week_usd") is not None else None)
     try:

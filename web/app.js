@@ -1770,13 +1770,14 @@ const ALERT_STATE = {
   nodata: { dot: "off",  word: "No data yet" },
   off:    { dot: "off",  word: "Off" },
 };
-const ALERT_UNIT = { usd: "USD", tokens: "tokens", min: "minutes", count: "errors" };
+const ALERT_UNIT = { usd: "USD", tokens: "tokens", min: "minutes", count: "errors", x: "× normal" };
 
 function alertValue(unit, v) {
   if (v == null) return "—";
   if (unit === "usd") return money(v);
   if (unit === "tokens") return fmt(v);
   if (unit === "min") return v < 60 ? `${Math.round(v)}m` : `${(v / 60).toFixed(1)}h`;
+  if (unit === "x") return `${Number(v).toFixed(1)}×`;
   return fullNum(v);
 }
 
