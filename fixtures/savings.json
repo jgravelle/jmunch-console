@@ -1,8 +1,11 @@
 {
   "savings": {
-    "tokens_saved_30d": 4120000,
-    "usd_saved_30d": 61.8,
+    "model": "opus",
+    "models": { "fable": 10.0, "opus": 5.0, "sonnet": 3.0, "haiku": 1.0 },
+    "tokens_saved_window": 4120000,
+    "usd_saved_window": 20.6,
     "tokens_saved_total": 76854041,
+    "usd_saved_total": 384.27,
     "calls": 1843,
     "tool_breakdown": [
       { "tool": "search_symbols", "tokens": 1880000, "calls": 612 },
@@ -12,11 +15,11 @@
       { "tool": "search_text", "tokens": 217000, "calls": 221 }
     ],
     "series": [
-      { "date": "2026-05-09", "tokens_saved": 121000, "usd": 1.8 },
-      { "date": "2026-05-16", "tokens_saved": 940000, "usd": 14.1 },
-      { "date": "2026-05-23", "tokens_saved": 1102000, "usd": 16.5 },
-      { "date": "2026-05-30", "tokens_saved": 988000, "usd": 14.8 },
-      { "date": "2026-06-06", "tokens_saved": 969000, "usd": 14.6 }
+      { "date": "2026-06-02", "tokens_saved": 121000, "usd": 0.61 },
+      { "date": "2026-06-03", "tokens_saved": 940000, "usd": 4.7 },
+      { "date": "2026-06-04", "tokens_saved": 1102000, "usd": 5.51 },
+      { "date": "2026-06-05", "tokens_saved": 988000, "usd": 4.94 },
+      { "date": "2026-06-06", "tokens_saved": 969000, "usd": 4.85 }
     ]
   }
 }

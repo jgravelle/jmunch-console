@@ -243,6 +243,19 @@ main.view {
 .chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
 .chip { font-size: var(--fs-xs); color: var(--text-muted); background: var(--surface-raised); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
 
+/* ---- savings controls (window chips + pricing model) ---- */
+.savings-controls { flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.model-picker { align-items: center; gap: var(--sp-1); margin: var(--sp-2) 0; }
+.model-picker select { font: inherit; font-size: var(--fs-xs); color: var(--text); background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px 6px; cursor: pointer; }
+.model-picker select:hover { border-color: var(--border-strong); }
+
+/* ---- range chips (selectable time windows) ---- */
+.range-chips { flex-wrap: wrap; gap: var(--sp-1); margin: var(--sp-2) 0; }
+.range-chips .chip { font: inherit; font-size: var(--fs-xs); font-weight: var(--fw-medium); padding: 3px 11px; cursor: pointer; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.range-chips .chip:hover { color: var(--text); border-color: var(--border-strong); }
+.range-chips .chip-on { color: var(--bg); background: var(--text); border-color: var(--text); }
+.range-chips .chip-on:hover { color: var(--bg); }
+
 /* ---- pills (index states) ---- */
 .pill { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-xs); font-weight: var(--fw-medium); padding: 2px 9px; border-radius: 999px; border: 1px solid transparent; }
 .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }

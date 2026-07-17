@@ -99,10 +99,28 @@ file bytes.
   Shows "not yet attributable" until Claude Code sessions work in an indexed repo
   and changes land. The same number appears as an **ROI** line in the sidebar rail,
   linking here.
-- **Headline tiles:** tokens and dollars saved over the last 30 days, plus
+- **Window:** the chips across the top pick the period everything below them
+  covers — Today, Yesterday, This Week, This Month, This Year, or All Time. These
+  are calendar windows in your local time, so "Yesterday" is yesterday where you
+  are. Each window is its own scan of your transcripts, so the first click on a
+  window takes a moment; switching back to one you've already viewed is instant.
+- **Priced at:** the model whose input rate turns tokens into dollars. Pick the
+  one your work actually runs on. The token counts never change — only what
+  they're worth — and both dollar tiles move together so they always agree. The
+  list comes from the suite itself, so it stays current with published pricing.
+  Your choice is remembered.
+- **Headline tiles:** tokens and dollars saved in the selected window, plus
   all-time totals (the all-time tiles tick up live as the suite serves calls).
-- **By tool:** a per-tool breakdown of where the savings came from.
-- **Trend:** a rolling 30-day chart the console accumulates day by day.
+  Window figures come from the suite's own per-call meter (sub-label "suite
+  meter") whenever its daily history covers the window — the meter records what
+  each call actually avoided. Windows that reach back before the meter's daily
+  history began fall back to a transcript scan (sub-label "modeled from
+  transcripts"), which is much smaller: transcripts get cleared over time and
+  the model is deliberately conservative. A note under the tiles says when
+  that's what you're seeing; the gap closes on its own as meter history accrues.
+- **By tool:** a per-tool breakdown of where the selected window's savings came from.
+- **Savings per day:** one bar per day in the window, from the same scan that
+  produced the tiles above — so the bars always add up to the headline figure.
 
 For the per-repo view of the same metric (plus rework rate and by-kind
 breakdown), see the [Productivity](#productivity) screen.
@@ -414,7 +432,7 @@ blurring secondary actions. This is a **soft gate**: a UX nudge, not a security
 boundary. It exists to surface the value of a license, not to enforce one.
 
 - **Where it shows:** the Savings *By tool* table (rows past the first), the
-  Savings 30-day chart, and Sessions *resume* (past the first three).
+  Savings per-day chart, and Sessions *resume* (past the first three).
 - **Entering a key:** click a product's license dot in the rail and paste the key.
   The console validates it against the licensing backend and reflects the result
   immediately (the gate clears without a restart).
@@ -443,7 +461,6 @@ committed):
 |------|-------|
 | `data/console_settings.json` | Your Config-screen settings and Alert thresholds |
 | `data/licenses.json` | Per-product license keys you entered |
-| `data/savings_history.json` | The rolling 30-day savings series the console accumulates |
 | `data/delivery_history.json` | Per-repo Productivity history |
 | `.env` (repo root) | Optional `CLAUDE_ADMIN_KEY` for the org Usage/Cost panel |
 

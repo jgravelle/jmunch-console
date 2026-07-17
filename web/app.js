@@ -820,9 +820,49 @@ async function watchPack(packId, name) {
   toast("still downloading — the index list catches up once the terminal finishes", "");
 }
 
+// Selectable savings windows. Keys match the server's SAVINGS_RANGES; the
+// server resolves each to receipt --since/--until against the local calendar.
+const SAVINGS_RANGES = [
+  ["today", "Today"],
+  ["yesterday", "Yesterday"],
+  ["week", "This Week"],
+  ["month", "This Month"],
+  ["year", "This Year"],
+  ["all", "All Time"],
+];
+const SAVINGS_RANGE_LABELS = Object.fromEntries(SAVINGS_RANGES);
+let SAVINGS_RANGE = "month";
+
+// The tokens saved are a measurement; the dollars are that measurement valued at
+// a price, so the price is the user's to pick. Persisted because it's a
+// preference (which model your work actually runs on), not a transient view.
+let SAVINGS_MODEL = localStorage.getItem("jmunch.savings.model") || "opus";
+
+function rangeChips(active) {
+  return `<div class="row range-chips" role="group" aria-label="savings window">` +
+    SAVINGS_RANGES.map(([k, label]) =>
+      `<button class="chip${k === active ? " chip-on" : ""}" data-range="${k}"${k === active ? ' aria-current="true"' : ""}>${esc(label)}</button>`
+    ).join("") +
+    `</div>`;
+}
+
+// Options come from the rates jcm published, never a list hardcoded here — that
+// way a repriced or newly-added model shows up without a console change.
+function modelPicker(models, active) {
+  const names = Object.keys(models || {});
+  if (!names.length) return "";
+  const opts = names
+    .map((m) => `<option value="${esc(m)}"${m === active ? " selected" : ""}>${esc(m[0].toUpperCase() + m.slice(1))} · $${esc(String(models[m]))}/MTok</option>`)
+    .join("");
+  return `<label class="row model-picker" title="Rate used to value the tokens saved. The token counts don't change — only what they're worth.">
+      <span class="muted">Priced at</span>
+      <select id="savings-model" aria-label="pricing model">${opts}</select>
+    </label>`;
+}
+
 function sparkbars(series) {
   if (!series || !series.length)
-    return `<div class="empty">savings history accumulates here as the console records a daily snapshot</div>`;
+    return `<div class="empty">no jCodeMunch tool calls in this window</div>`;
   const w = 720, h = 150, pad = 10;
   const max = Math.max(...series.map((p) => Number(p.tokens_saved) || 0), 1);
   const bw = (w - pad * 2) / series.length;
@@ -846,7 +886,7 @@ function sparkbars(series) {
 function roiHero(roi, s) {
   const r = roi || {};
   const cpd = r.cost_per_durable == null ? "n/a" : money(r.cost_per_durable);
-  const savedTok = s.tokens_saved_30d == null ? "n/a" : fullNum(s.tokens_saved_30d);
+  const savedTok = s.tokens_saved_window == null ? "n/a" : fullNum(s.tokens_saved_window);
   const spend = r.total_cost_usd == null ? "n/a" : money(r.total_cost_usd);
   const note = r.attributable
     ? `${fmt(r.total_durable)} durable change${r.total_durable === 1 ? "" : "s"} across ${fmt(r.contributor_count)} repo${r.contributor_count === 1 ? "" : "s"} · last ${fmt(r.window_days)}d`
@@ -862,17 +902,41 @@ function roiHero(roi, s) {
 }
 
 async function renderSavings() {
-  const [d, roi] = await Promise.all([api("/api/savings"), api("/api/roi")]);
+  const rng = SAVINGS_RANGE;
+  const label = SAVINGS_RANGE_LABELS[rng] || rng;
+  const [d, roi] = await Promise.all([
+    api(`/api/savings?range=${encodeURIComponent(rng)}&model=${encodeURIComponent(SAVINGS_MODEL)}`),
+    api("/api/roi"),
+  ]);
   const s = d.savings || {};
+  // The server has the last word on the model: a stored preference naming a model
+  // jcm no longer prices falls back to jcm's default, and the UI must follow that
+  // rather than keep showing a selection the numbers aren't actually priced at.
+  if (s.model && s.model !== SAVINGS_MODEL) {
+    SAVINGS_MODEL = s.model;
+    localStorage.setItem("jmunch.savings.model", SAVINGS_MODEL);
+  }
   const total = s.tokens_saved_total == null ? "n/a" : fullNum(s.tokens_saved_total);
   const usdTotal = s.usd_saved_total == null ? "n/a" : money(s.usd_saved_total);
+  // Window tiles first, then the two lifetime tiles. The lifetime pair reads the
+  // suite's own counter rather than transcripts, so it legitimately exceeds even
+  // the All Time window (transcripts get cleared on reinstall, the counter
+  // doesn't) — hence the explicit "all-time" labels rather than leaving a reader
+  // to assume every tile moves with the chips. Both carry ids so the live poll
+  // can update them in place.
+  const modelName = s.model ? s.model[0].toUpperCase() + s.model.slice(1) : "";
+  const rate = s.models && s.model ? s.models[s.model] : null;
+  const atRate = rate == null ? `at ${modelName} rates` : `at ${modelName} rates ($${rate}/MTok)`;
+  // Window figures come from the suite's own per-call meter when available
+  // (window_source "meter"); "transcripts" is the older, much smaller
+  // transcript-scan fallback and the sub-label says which one you're seeing.
+  const winSub = s.window_source === "meter" ? "suite meter, all sessions" : "modeled from transcripts";
   const tiles = [
-    ["Tokens saved (30d)", fullNum(s.tokens_saved_30d), "modeled from transcripts"],
-    // All-time $ tracks the lifetime counter at the same Opus rate as the receipt;
-    // both all-time tiles carry ids so the live poll updates them in place.
-    ["$ saved up to", usdTotal, "lifetime · at Opus rates", "kpi-usd-alltime"],
+    [`Tokens saved (${label})`, fullNum(s.tokens_saved_window), winSub],
+    [`$ saved (${label})`, s.usd_saved_window == null ? "n/a" : money(s.usd_saved_window), atRate],
     ["Tokens saved (all-time)", total, "lifetime counter, all sessions", "kpi-alltime"],
-    ["jCode tool calls (30d)", fmt(s.calls), "savings track jCodeMunch tool use only"],
+    ["$ saved (all-time)", usdTotal, `lifetime · ${atRate}`, "kpi-usd-alltime"],
+    [`jCode tool calls (${label})`, fmt(s.calls), "transcript-scanned jCode calls only"],
   ]
     .map((t) => `<div class="kpi"><div class="k-label">${esc(t[0])}</div><div class="k-value"${t[3] ? ` id="${t[3]}"` : ""}>${esc(t[1])}</div><div class="k-sub">${esc(t[2])}</div></div>`)
     .join("");
@@ -905,21 +969,38 @@ async function renderSavings() {
   }
   view.innerHTML =
     head("Savings", "Tokens and dollars saved by jCodeMunch MCP tool calls, modeled from your Claude transcripts. Plain edits, shell, and other tools don't register here.", d._source) +
+    `<div class="row savings-controls">${rangeChips(rng)}${modelPicker(s.models, s.model)}</div>` +
     roiHero(roi, s) +
     `<div class="section-title">Inputs — tokens &amp; spend</div>` +
     `<div class="kpis">${tiles}</div>` +
-    `<div class="section-title">Rolling 30-day savings</div>` +
+    (s.meter_note ? `<div class="muted" style="margin-top:var(--sp-2)">${esc(s.meter_note)}</div>` : "") +
+    `<div class="section-title">Savings per day — ${esc(label)}</div>` +
     // Unlicensed: the CTA displaces the bar graph; the per-tool table below
     // stays but with all rows past the first blurred.
     (locked
       ? `<div class="lic-cta-block">(enter a valid license # in jMunch, LLC Apps to view)</div>`
       : sparkbars(s.series)) +
-    `<div class="section-title">By tool</div>` +
+    `<div class="section-title">By tool — ${esc(label)}</div>` +
     (tools
       ? `<table class="grid-tbl"><thead><tr><th>tool</th><th class="num">tokens saved</th><th class="num">calls</th></tr></thead><tbody>${tools}</tbody></table>`
       : `<div class="empty">No telemetry yet.</div>`) +
     `<div class="section-title">Org rollup${o.configured ? "" : ' <span class="gated">team SKU</span>'}</div>` +
     orgHtml;
+
+  view.querySelectorAll(".range-chips .chip").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (b.dataset.range === SAVINGS_RANGE) return;
+      SAVINGS_RANGE = b.dataset.range;
+      renderSavings(); // re-renders (and restarts the live poll) for the new window
+    })
+  );
+  const modelSel = view.querySelector("#savings-model");
+  if (modelSel)
+    modelSel.addEventListener("change", () => {
+      SAVINGS_MODEL = modelSel.value;
+      localStorage.setItem("jmunch.savings.model", SAVINGS_MODEL);
+      renderSavings();
+    });
 
   // Live updates: poll the cheap lifetime counter so the All-Time tile climbs in
   // near-real-time as jcm runs, without re-paying the receipt transcript scan.
@@ -930,7 +1011,7 @@ async function renderSavings() {
 
 // --- Live savings polling -------------------------------------------------
 // The All-Time tile is jcm's lifetime counter (a tiny `_savings.json` read);
-// the 30d tiles/chart come from the expensive `receipt` transcript scan. So we
+// the windowed tiles/chart come from the expensive `receipt` transcript scan. So we
 // poll only the cheap signal on a fast cadence and update the headline in place,
 // and refresh the full (receipt-backed) panel only when the counter has actually
 // moved AND it's been a while — bounding the heavy scan during active work.
@@ -969,7 +1050,7 @@ function startSavingsPoll() {
       stopSavingsPoll();
       return;
     }
-    const d = await api("/api/savings/live");
+    const d = await api(`/api/savings/live?model=${encodeURIComponent(SAVINGS_MODEL)}`);
     const total = d && d.tokens_saved_total;
     if (total == null) return;
 
@@ -978,7 +1059,7 @@ function startSavingsPoll() {
     flashSet("kpi-alltime", fullNum(total));
     if (d.usd_saved_total != null) flashSet("kpi-usd-alltime", money(d.usd_saved_total));
 
-    // Counter moved → the 30d view is stale too, but the receipt scan is heavy,
+    // Counter moved → the windowed view is stale too, but the receipt scan is heavy,
     // so refresh it at most once per SAVINGS_RECEIPT_MIN_MS. Idle = never fires.
     if (SAVINGS_LAST_TOTAL != null && total !== SAVINGS_LAST_TOTAL &&
         Date.now() - SAVINGS_RENDERED_AT >= SAVINGS_RECEIPT_MIN_MS) {

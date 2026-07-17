@@ -34,7 +34,7 @@ console falls back to sample data. Offline-safe, binds to `127.0.0.1` only.
 | Screen | What it does |
 |--------|--------------|
 | **Index & Watcher** | Your indexed repos: freshness, symbols, reindex/delete, and one-click Starter Packs |
-| **Savings** | Tokens and dollars saved by the suite: headline tiles, per-tool table, 30-day trend |
+| **Savings** | Tokens and dollars saved by the suite, for any window (Today → All Time) at any model's rate: headline tiles, per-tool table, per-day chart |
 | **Token Usage** | Live Claude token spend from your transcripts (and org-wide, with an admin key) |
 | **Productivity** | Cost per durable change: AI spend joined to git outcomes |
 | **Sessions** | Browse and resume past Claude Code sessions |

@@ -44,7 +44,6 @@ ROOT = Path(__file__).resolve().parent
 WEB = ROOT / "web"
 FIXTURES = ROOT / "fixtures"
 DATA = ROOT / "data"
-HISTORY = DATA / "savings_history.json"
 DELIVERY_HISTORY = DATA / "delivery_history.json"
 USAGE_HISTORY = DATA / "usage_history.json"
 CONSOLE_SETTINGS = DATA / "console_settings.json"
@@ -419,79 +418,202 @@ def health(repo: str) -> dict:
     return _tag(_fixture("health"), "fixture")
 
 
-def _record_history(tokens: int, usd: float) -> list[dict]:
-    """Append today's rolling-30d savings snapshot to a Console-owned history
-    file and return the series. One point per day (today's is updated in place),
-    capped at 90 days. This is how the time-series chart becomes real without
-    any suite change — the receipt CLI only reports a window total, so the
-    Console accumulates its own daily rollup. Best-effort: never raises.
+# Selectable savings windows. Each resolves to the receipt CLI's `--since` /
+# `--until` bounds against the LOCAL calendar, because "yesterday" means
+# yesterday where the user is sitting. `until` is exclusive, so adjacent
+# windows can't both claim a call on the boundary. To-date windows (week /
+# month / year) leave `until` open so they run up to this instant; `all` drops
+# both bounds and the receipt scans every transcript it can still see.
+SAVINGS_RANGES = ("today", "yesterday", "week", "month", "year", "all")
+DEFAULT_SAVINGS_RANGE = "month"
+
+
+def _range_bounds(rng: str) -> tuple[str | None, str | None]:
+    """(since, until) as ISO dates for a range key, or (None, None) for all-time."""
+    today = datetime.date.today()
+    if rng == "today":
+        return today.isoformat(), None
+    if rng == "yesterday":
+        return (today - datetime.timedelta(days=1)).isoformat(), today.isoformat()
+    if rng == "week":  # week-to-date, Monday-anchored
+        return (today - datetime.timedelta(days=today.weekday())).isoformat(), None
+    if rng == "month":
+        return today.replace(day=1).isoformat(), None
+    if rng == "year":
+        return today.replace(month=1, day=1).isoformat(), None
+    return None, None
+
+
+def _receipt(rng: str, model: str) -> dict | None:
+    """One `receipt` scan scoped to `rng` and priced at `model`, as parsed JSON.
+    None if the CLI fails.
+
+    `--by-day` rides along so the same scan that produces the window totals also
+    produces the per-day series the chart draws — no second scan, and the bars
+    always reconcile with the tiles above them because they came from one
+    aggregation. Falls back to the pre-1.108.134 rolling-window flags when the
+    installed jcm doesn't know `--since` (the response then carries no series).
     """
-    today = datetime.date.today().isoformat()
-    points: list[dict] = []
+    tmp = Path(tempfile.gettempdir()) / f"jmunch_console_receipt_{rng}_{model}.json"
+    since, until = _range_bounds(rng)
+    args = ["receipt", "--model", model, "--by-day", "--export", str(tmp)]
+    if since:
+        args += ["--since", since]
+    if until:
+        args += ["--until", until]
+    if not since:
+        args += ["--days", "0"]
+    if _run_cli(args, timeout=60) is None:
+        # Older jcm: no calendar windows. Approximate with the rolling window it
+        # does understand rather than dropping the panel to fixtures.
+        days = {"today": 1, "yesterday": 2, "week": 7, "month": 30, "year": 365, "all": 0}[rng]
+        fallback = ["receipt", "--model", model, "--days", str(days), "--export", str(tmp)]
+        if _run_cli(fallback, timeout=60) is None:
+            return None
     try:
-        if HISTORY.exists():
-            points = json.loads(HISTORY.read_text(encoding="utf-8")).get("points", [])
+        return json.loads(tmp.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        points = []
-    snap = {"date": today, "tokens_saved": tokens, "usd": round(usd, 4)}
-    if points and points[-1].get("date") == today:
-        points[-1] = snap
-    else:
-        points.append(snap)
-    points = points[-90:]
-    try:
-        DATA.mkdir(exist_ok=True)
-        HISTORY.write_text(json.dumps({"points": points}), encoding="utf-8")
-    except OSError:
-        pass
-    return points
+        return None
 
 
-def savings() -> dict:
-    """Token/$ savings, normalized from `receipt --export <tmp>.json` (live).
+def savings(rng: str = DEFAULT_SAVINGS_RANGE, model: str | None = None) -> dict:
+    """Token/$ savings for one window at one model's rate, from `receipt --export`.
 
     Receipt shape: {totals:{calls,savings_tokens,...}, per_tool:{t:{...}},
-    savings_usd}. Folded into the unified `savings` object the UI renders, so
-    the panel looks identical on live or fixture data. The 30d receipt window
-    drives the headline tiles + per-tool table + the rolling series. The
-    All-Time tile instead reads jcm's authoritative lifetime counter from
+    savings_usd, by_day:[...]}. Folded into the unified `savings` object the UI
+    renders, so the panel looks identical on live or fixture data. The selected
+    window drives the headline tiles + per-tool table + the daily series. The
+    All-Time tiles instead read jcm's authoritative lifetime counter from
     `_savings.json` (`_lifetime_savings`) — the receipt only models savings from
     on-disk transcripts (a small subset), whereas the lifetime counter is the
     real cumulative total (the same number the anon community meter tracks).
+    Window figures come from the METER's daily book when the installed jcm
+    records one (>= 1.108.136): the meter is the authoritative record of what
+    each call actually avoided, where the transcript scan misses cleared history
+    and models conservatively — observed FOUR ORDERS OF MAGNITUDE under the
+    meter on this install (2.2M transcript-provable tokens vs 34.3B metered).
+    With the meter driving the windows, the `all` window and the All-Time tile
+    are the same number, closing that disconnect. The receipt scan still
+    supplies what only transcripts know: the per-tool breakdown + call count.
+    Older jcm (no daily book) falls back to the transcript window figures.
+
+    Both dollar figures are priced at `model`'s input rate — the tokens saved are
+    a measurement, the dollars are that measurement valued at a price, so the
+    price is the caller's to pick. Every priced model jcm knows is selectable;
+    the list is never hardcoded here.
     """
+    rng = rng if rng in SAVINGS_RANGES else DEFAULT_SAVINGS_RANGE
     if not FORCE_FIXTURES:
-        tmp = Path(tempfile.gettempdir()) / "jmunch_console_receipt.json"
-        if _run_cli(["receipt", "--days", "30", "--export", str(tmp)]) is not None:
-            try:
-                data = json.loads(tmp.read_text(encoding="utf-8"))
-                tot = data.get("totals", {})
-                tools = sorted(
-                    (
-                        {"tool": k, "tokens": v.get("savings_tokens", 0), "calls": v.get("calls", 0)}
-                        for k, v in data.get("per_tool", {}).items()
-                    ),
-                    key=lambda r: r["tokens"],
-                    reverse=True,
-                )
-                series = _record_history(tot.get("savings_tokens", 0), data.get("savings_usd", 0) or 0)
-                return _tag({"savings": {
-                    "tokens_saved_30d": tot.get("savings_tokens", 0),
-                    "usd_saved_30d": data.get("savings_usd", 0),
-                    "tokens_saved_total": _lifetime_savings(),
-                    "usd_saved_total": _lifetime_usd(),
-                    "calls": tot.get("calls", 0),
-                    "tool_breakdown": tools,
-                    "series": series,
-                    # Soft gate: the UI blurs all but the first per-tool row and
-                    # shows a CTA when no valid suite license is on file.
-                    "licensed": _any_valid_license(),
-                }}, "live")
-            except (OSError, ValueError):
-                pass
+        model = _resolve_model(model)
+        data = _receipt(rng, model)
+        if data is not None:
+            tot = data.get("totals", {})
+            rate = _model_rates()["rates"].get(model)
+            tools = sorted(
+                (
+                    {"tool": k, "tokens": v.get("savings_tokens", 0), "calls": v.get("calls", 0)}
+                    for k, v in data.get("per_tool", {}).items()
+                ),
+                key=lambda r: r["tokens"],
+                reverse=True,
+            )
+            series = [
+                {"date": r.get("date"), "tokens_saved": r.get("savings_tokens", 0), "usd": r.get("savings_usd", 0)}
+                for r in data.get("by_day", [])
+            ]
+            win_tokens = tot.get("savings_tokens", 0)
+            win_usd = data.get("savings_usd", 0)
+            meter_tokens, meter_series, meter_note = _meter_window(rng)
+            window_source = "transcripts" if meter_tokens is None else "meter"
+            if meter_tokens is not None:
+                win_tokens = meter_tokens
+                win_usd = round(meter_tokens * rate / 1_000_000, 2) if rate else None
+                # Tile and chart must come from the same source or they can't
+                # reconcile — an empty meter series renders as "no data", never
+                # as transcript bars beside a meter tile.
+                series = [
+                    {**r, "usd": round(r["tokens_saved"] * rate / 1_000_000, 4) if rate else 0}
+                    for r in meter_series
+                ]
+            return _tag({"savings": {
+                "range": rng,
+                "window": data.get("window") or {},
+                "model": model,
+                "models": _model_rates()["rates"],
+                "window_source": window_source,
+                "meter_note": meter_note,
+                "tokens_saved_window": win_tokens,
+                "usd_saved_window": win_usd,
+                "tokens_saved_total": _lifetime_savings(),
+                "usd_saved_total": _lifetime_usd(model),
+                "calls": tot.get("calls", 0),
+                "tool_breakdown": tools,
+                "series": series,
+                # Soft gate: the UI blurs all but the first per-tool row and
+                # shows a CTA when no valid suite license is on file.
+                "licensed": _any_valid_license(),
+            }}, "live")
     fx = _fixture("savings")
     if isinstance(fx.get("savings"), dict):
         fx["savings"]["licensed"] = _any_valid_license()
+        fx["savings"]["range"] = rng
+        # Offline/demo can't shell jcm for the live table, so honor the fixture's
+        # own rates rather than collapsing the picker to the lone fallback rate.
+        fx["savings"].setdefault("models", _model_rates()["rates"])
+        fx["savings"]["model"] = model if model in fx["savings"]["models"] else DEFAULT_SAVINGS_MODEL
     return _tag(fx, "fixture")
+
+
+def _meter_daily() -> dict:
+    """The meter's per-day tokens-saved map from `_savings.json` (`daily`,
+    jcm >= 1.108.136) — {iso_date: tokens}. Empty when the installed jcm predates
+    the daily book or nothing has flushed yet."""
+    root = os.environ.get("CODE_INDEX_PATH") or os.path.join(os.path.expanduser("~"), ".code-index")
+    try:
+        data = json.loads((Path(root) / "_savings.json").read_text(encoding="utf-8"))
+        daily = data.get("daily")
+        return daily if isinstance(daily, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _meter_window(rng: str) -> tuple[int | None, list[dict], str | None]:
+    """(tokens_saved, per-day series, note) for a range, from the meter's daily
+    book — or (None, [], note) when the meter can't honestly answer this window.
+
+    The meter only drives a window it FULLY covers: `all` always (the lifetime
+    counter reaches all the way back even though the daily chart doesn't), and a
+    calendar window only when it starts on/after the daily book's first entry.
+    A window the book only partially covers falls back to transcripts — a meter
+    figure missing the window's early days would understate while the chart
+    showed something else, which is the tile/chart disagreement this exists to
+    kill. The note explains the fallback so the smaller figure reads as a data
+    limit, not the truth.
+    """
+    daily = _meter_daily()
+    if rng == "all":
+        tok = _lifetime_savings()
+        if tok is None:
+            return None, [], None
+        series = [{"date": d, "tokens_saved": daily[d]} for d in sorted(daily)]
+        note = None
+        if daily and tok > sum(daily.values()):
+            note = f"chart covers meter history since {min(daily)}; the totals reach further back"
+        return tok, series, note
+    if not daily:
+        return None, [], None
+    since, until = _range_bounds(rng)
+    if since < min(daily):
+        return None, [], (
+            f"suite meter history begins {min(daily)}, after this window starts — "
+            "figures below are the smaller transcript-provable subset"
+        )
+    rows = [
+        {"date": d, "tokens_saved": daily[d]}
+        for d in sorted(daily)
+        if d >= since and (until is None or d < until)
+    ]
+    return sum(r["tokens_saved"] for r in rows), rows, None
 
 
 def _lifetime_savings() -> int | None:
@@ -508,30 +630,82 @@ def _lifetime_savings() -> int | None:
         return None
 
 
-# The `receipt` models savings at the Opus rate of $15 / 1M tokens — verified
-# against the live receipt output ($2.612055 / 174,137 tok = 15e-6 to the penny).
-# The All-Time $ tile multiplies the lifetime counter by the SAME rate so it
-# agrees with the receipt-derived 30d dollar figure and ticks live with the
-# counter. Update here if jcm reprices the receipt's Opus model.
-_OPUS_USD_PER_TOKEN = 15.0 / 1_000_000
+# Model input rates come from jcm (`receipt --rates`), never a copy kept here.
+# A copy is how the All-Time $ tile ended up pricing at the retired $15 Opus rate
+# while the receipt-derived window tile priced at $5 — two dollar figures on one
+# screen, silently disagreeing by 3x. `--rates` scans nothing, so this is cheap;
+# the long TTL is just to avoid a subprocess per poll. The fallback exists only
+# so the panel degrades rather than blanking if the CLI is missing.
+_FALLBACK_RATES = {"opus": 5.0}
+DEFAULT_SAVINGS_MODEL = "opus"
 
 
-def _lifetime_usd() -> float | None:
-    """All-time dollars saved = lifetime token counter x the receipt's Opus rate.
-    None when the counter is unavailable."""
+def _model_rates() -> dict:
+    """{model: usd_per_mtok} + default, straight from jcm's price table.
+
+    Only a SUCCESSFUL read is cached. Caching the fallback would let one
+    transient CLI failure (a hiccup at startup, fixtures forced on) pin the
+    picker to a single model for the whole TTL, long after jcm was reachable
+    again — a stuck degraded state that looks like a missing feature.
+    """
+    ent = _CACHE.get("model_rates")
+    if ent and time.time() - ent[0] < 3600.0:
+        return ent[1]
+    raw = _run_cli(["receipt", "--rates"], timeout=20)
+    if raw:
+        try:
+            d = json.loads(raw)
+            rates = d.get("rates_usd_per_mtok")
+            if isinstance(rates, dict) and rates:
+                val = {"rates": rates, "default": d.get("default_model") or DEFAULT_SAVINGS_MODEL}
+                _CACHE["model_rates"] = (time.time(), val)
+                return val
+        except ValueError:
+            pass
+    return {"rates": dict(_FALLBACK_RATES), "default": DEFAULT_SAVINGS_MODEL}
+
+
+def _resolve_model(model: str | None) -> str:
+    """The requested model if jcm prices it, else jcm's own default."""
+    r = _model_rates()
+    return model if model in r["rates"] else r["default"]
+
+
+def _lifetime_usd(model: str | None = None) -> float | None:
+    """All-time dollars saved = lifetime token counter x the selected model's
+    input rate — the same rate the receipt applies to the window figure, so the
+    two dollar tiles always agree about what a token is worth. None when the
+    counter (or the rate) is unavailable."""
     tok = _lifetime_savings()
-    return None if tok is None else round(tok * _OPUS_USD_PER_TOKEN, 2)
+    rate = _model_rates()["rates"].get(_resolve_model(model))
+    if tok is None or rate is None:
+        return None
+    return round(tok * rate / 1_000_000, 2)
 
 
-def savings_live() -> dict:
+def _savings_cached(rng: str, model: str | None = None) -> dict:
+    """TTL-cached `savings()` keyed by window AND model — each combination is its
+    own transcript scan, so they can't share an entry. `today` gets a short TTL
+    (it's the one window that moves as you work); settled windows sit longer."""
+    rng = rng if rng in SAVINGS_RANGES else DEFAULT_SAVINGS_RANGE
+    model = _resolve_model(model)
+    ttl = 30.0 if rng in ("today", "week", "month", "year") else 300.0
+    return _cached(f"savings:{rng}:{model}", ttl, lambda: savings(rng, model))
+
+
+def savings_live(model: str | None = None) -> dict:
     """Cheap, high-frequency savings signal: jcm's lifetime counter read straight
     from `_savings.json` — no `receipt` subprocess, no transcript scan. Lets the
     Console poll the All-Time tiles in near-real-time at negligible cost: it reads
     the very file the live jcm server writes on each tool call, so there is zero
-    load on jcm itself. The expensive 30d receipt stays on `/api/savings`."""
+    load on jcm itself. The expensive windowed receipt stays on `/api/savings`.
+
+    Takes the model so the polled dollar figure keeps agreeing with the panel it's
+    updating in place — pricing the live tick at a different rate than the render
+    would make the tile flicker between two numbers."""
     return {
         "tokens_saved_total": _lifetime_savings(),
-        "usd_saved_total": _lifetime_usd(),
+        "usd_saved_total": _lifetime_usd(model),
         "_source": "live",
     }
 
@@ -4146,8 +4320,10 @@ _API = {
     "/api/repos": lambda q: repos(fresh=(q.get("fresh") or [""])[0] in ("1", "true", "yes")),
     "/api/config": lambda q: config(),
     "/api/sibling-config": lambda q: sibling_config(),
-    "/api/savings": lambda q: savings(),
-    "/api/savings/live": lambda q: savings_live(),
+    # Each window is its own transcript scan, so cache per range+model key —
+    # switching chips back and forth shouldn't re-pay a scan just waited for.
+    "/api/savings": lambda q: _savings_cached((q.get("range") or [""])[0], (q.get("model") or [""])[0]),
+    "/api/savings/live": lambda q: savings_live((q.get("model") or [""])[0]),
     "/api/usage": lambda q: usage_panel(),
     "/api/delivery": lambda q: delivery_panel((q.get("repo") or [""])[0], (q.get("window") or ["30"])[0]),
     "/api/roi": lambda q: roi_panel((q.get("window") or ["30"])[0]),
