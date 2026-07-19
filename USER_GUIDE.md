@@ -56,7 +56,12 @@ top-right; both persist in your browser.
   `jdocmunch-mcp`, and `jdatamunch-mcp`. Each row has two dots: an **install** dot
   (installed / update available / broken / not installed) and a **license** dot
   (valid / invalid / entered-unverified / none). Click a dot or row to install,
-  update, restart, or enter a license key.
+  update, restart, or enter a license key. The `jdocmunch-mcp` menu also offers
+  **Add office support** when its optional `[office]` extra isn't installed:
+  one click installs markitdown (Microsoft, MIT) into jDoc's own environment so
+  `.pdf`/`.docx`/`.pptx`/`.epub` files can be indexed (jDoc 1.105.0+; conversion
+  is 100% local, no cloud converters). Once active, the product's status line
+  shows "office ✓".
 - **Left rail, "Compatible Apps":** a curated set of complementary third-party
   tools you can install from here.
 - **Top bar:** a one-word mode indicator (`live`, `read-only`, or `fixtures
@@ -332,6 +337,12 @@ Reached via the **gear** in the top bar. Three groups:
    large-corpus crash report to bound the reindex fan-out on bursty edits. Both
    siblings also carry `readOnlyHint` annotations now (jDoc 1.93.0+, jData
    1.17.0+), so Claude Code plan mode runs their read tools without prompting.
+   Both siblings also support an advisory session token budget
+   (`JDOCMUNCH_SESSION_TOKEN_BUDGET` on jDoc 1.104.0+,
+   `JDATAMUNCH_SESSION_TOKEN_BUDGET` on jData 1.21.0+): an opt-in ceiling on
+   response tokens served per session — responses warn via `_meta.budget` at
+   80%, never block. jCodeMunch's equivalent (`session_token_budget`) is a
+   regular config key, so it appears in the editable jCodeMunch tab.
 
 The Config screen also holds the **Console process** controls (restart / stop);
 see [Stopping and restarting the console](#stopping-and-restarting-the-console).

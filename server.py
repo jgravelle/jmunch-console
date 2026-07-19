@@ -229,6 +229,7 @@ SIBLING_SETTINGS = {
             ("hook_debounce_seconds", "JDOCMUNCH_HOOK_DEBOUNCE_SECONDS", "3", "Auto-reindex hook: per-file leading-edge debounce (coalesces rapid edits) [1.94.0+]"),
             ("hook_max_reindex", "JDOCMUNCH_HOOK_MAX_REINDEX", "2", "Auto-reindex hook: max concurrent reindex workers (cross-process slot cap) [1.94.0+]"),
             ("hook_log", "JDOCMUNCH_HOOK_LOG", "0 (off)", "Auto-reindex hook: 1 writes a breadcrumb log to _hooks/reindex.log [1.94.0+]"),
+            ("session_token_budget", "JDOCMUNCH_SESSION_TOKEN_BUDGET", "0 (off)", "Advisory ceiling on response tokens served per session; _meta.budget warns at >=80%, never blocks [1.104.0+]"),
         ],
     },
     "jDataMunch-MCP": {
@@ -240,6 +241,7 @@ SIBLING_SETTINGS = {
             ("share_savings", "JDATAMUNCH_SHARE_SAVINGS", "1 (on)", "Anonymous token-savings telemetry"),
             ("meta_fields", "JDATAMUNCH_META_FIELDS", "[]", "Which _meta fields to keep (token-efficient default)"),
             ("use_ai_summaries", "JDATAMUNCH_USE_AI_SUMMARIES", "true", "AI-summarize during indexing"),
+            ("session_token_budget", "JDATAMUNCH_SESSION_TOKEN_BUDGET", "0 (off)", "Advisory ceiling on response tokens served per session; _meta.budget warns at >=80%, never blocks [1.21.0+]"),
         ],
     },
 }
@@ -2485,6 +2487,73 @@ def git_update(product_id: str) -> dict:
     return {"status": "updated", "product": product_id, "git": git_line, "refresh": refresh}
 
 
+# jDoc v1.105.0's optional [office] extra (pdf/docx/pptx/epub ingestion via
+# markitdown). The capability is just "is markitdown importable where jdoc
+# lives", so probe the interpreter that OWNS the jdocmunch-mcp launcher
+# (uv-tool/pipx isolated installs), falling back to the console interpreter
+# (same-interp / editable installs).
+_OFFICE_SPEC = "markitdown[pdf,docx,pptx]>=0.1.6"
+
+
+def _jdoc_office_state() -> bool | None:
+    """True = office extra active, False = jdoc installed without it,
+    None = jdoc not installed (state not applicable)."""
+    jd = next(p for p in PRODUCTS if p[0] == "jdocmunch")
+    _pid, _name, binname, _envvar, dist, _gh = jd
+    if not _product_installed(binname, dist):
+        return None
+    probe = "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec('markitdown') else 1)"
+    path = shutil.which(binname)
+    py = _venv_python_for(path) if path else None
+    if py:
+        try:
+            rc = subprocess.run(
+                [py, "-c", probe], capture_output=True, timeout=12,
+                stdin=subprocess.DEVNULL,
+            ).returncode
+            return rc == 0
+        except (OSError, subprocess.SubprocessError):
+            pass
+    import importlib.util
+    return importlib.util.find_spec("markitdown") is not None
+
+
+def office_install() -> dict:
+    """One-click add of jDoc's [office] extra — installs markitdown into the
+    environment that owns jdocmunch-mcp. Same ungated-but-bounded posture as
+    install(): fixed spec, our own product's documented extra, visible terminal,
+    client-side confirm. Deliberately installs the markitdown spec directly
+    (never reinstalls jdocmunch-mcp), so a held .exe is never rewritten and
+    editable/dev checkouts are safe."""
+    state = _jdoc_office_state()
+    if state is None:
+        return {"error": "jDocMunch-MCP is not installed", "_status": 409}
+    if state:
+        return {"error": "office support is already installed", "_status": 409}
+    ver = _parse_ver(_installed_version("jdocmunch-mcp", "jdocmunch-mcp"))
+    if ver and ver < (1, 105, 0):
+        return {"error": "office support needs jdocmunch-mcp 1.105.0+",
+                "hint": "update jDocMunch-MCP first", "_status": 409}
+    path = shutil.which("jdocmunch-mcp")
+    py = _venv_python_for(path) if path else None
+    uv = shutil.which("uv")
+    pipx = shutil.which("pipx")
+    if py and uv:
+        argv = [uv, "pip", "install", "--python", py, _OFFICE_SPEC]
+    elif py and pipx and not uv:
+        # pipx-owned env: inject is the supported way to add a dep
+        argv = [pipx, "inject", "jdocmunch-mcp", _OFFICE_SPEC]
+    else:
+        target = py or sys.executable
+        argv = [target, "-m", "pip", "install", _OFFICE_SPEC]
+    try:
+        _spawn_terminal(str(Path.home()), argv)
+    except Exception as e:
+        return {"error": f"could not start install: {e}", "_status": 500}
+    _CACHE.pop("products", None)
+    return {"status": "install_started", "spec": _OFFICE_SPEC}
+
+
 def _products_live() -> dict:
     """Per-product status for the sidebar rail: installed? (+ version, + whether
     a newer GitHub release exists) + license state. Subprocess version probes and
@@ -2494,8 +2563,13 @@ def _products_live() -> dict:
                     for pid, _, binname, _, dist, _ in PRODUCTS}
         rel_futs = {pid: ex.submit(_latest_release, gh)
                     for pid, _, _, _, _, gh in PRODUCTS}
+        office_fut = ex.submit(_jdoc_office_state)
         versions = {pid: f.result() for pid, f in ver_futs.items()}
         latests = {pid: f.result() for pid, f in rel_futs.items()}
+        try:
+            office = office_fut.result()
+        except Exception:
+            office = None
     out = []
     for pid, name, binname, envvar, dist, gh in PRODUCTS:
         installed = _product_installed(binname, dist)
@@ -2531,6 +2605,7 @@ def _products_live() -> dict:
             "behind": behind,
             "update_available": update_available,
             "key_source": key_source,
+            **({"office": office} if pid == "jdocmunch" else {}),
             **_license_state(pid, key),
         })
     return _tag({"products": out}, "live")
@@ -4371,6 +4446,7 @@ _POST_API = {
     "/api/git-update":  lambda b: git_update(str(b.get("product", ""))),
     "/api/install":     lambda b: install(str(b.get("product", ""))),
     "/api/install-all": lambda b: install_all(),
+    "/api/office-install": lambda b: office_install(),
     "/api/reinstall":   lambda b: reinstall(str(b.get("product", ""))),
     "/api/uninstall":   lambda b: uninstall(str(b.get("product", ""))),
     "/api/restart":     lambda b: restart_server(str(b.get("product", ""))),

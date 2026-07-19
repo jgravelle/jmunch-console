@@ -2476,6 +2476,20 @@ async function installAllFlow() {
   if (res.status === "install_started") nudgeLicenseAfterInstall(res.products || []);
 }
 
+// jDoc gained the [office] extra in 1.105.0; older installs would accept the
+// markitdown install but never use it, so the menu disables the item instead.
+function officeCapable(ver) {
+  const m = /(\d+)\.(\d+)\.(\d+)/.exec(ver || "");
+  if (!m) return true; // unknown version: let the server's own gate decide
+  const [maj, min, pat] = [+m[1], +m[2], +m[3]];
+  return maj > 1 || (maj === 1 && (min > 105 || (min === 105 && pat >= 0)));
+}
+
+async function officeFlow(name) {
+  if (!confirm(`Add office document support to ${name}?\n\nInstalls markitdown (Microsoft, MIT) into ${name}'s environment so .pdf/.docx/.pptx/.epub files can be indexed. Conversion is 100% local — no cloud converters are enabled.\n\nThis runs the installer in a new terminal — watch it there.`)) return;
+  postAction("/api/office-install", {}, "install_started", "adding office support", 0);
+}
+
 async function upgradeFlow(productId, name) {
   if (!confirm(`Update ${name} to the latest release?\n\nThis runs pip in a new terminal.`)) return;
   postAction("/api/upgrade", { product: productId }, "upgrade_started", `updating ${name}`, 4000);
@@ -2562,6 +2576,14 @@ function productMenu(id) {
     }>${esc(label)}</button>`;
   const items = [
     mi("license", p.license === "none" ? "Enter license key…" : "Change license key…", true, ""),
+    // jDoc's optional [office] extra (pdf/docx/pptx/epub ingestion). Same
+    // ungated-but-bounded posture as install: fixed spec, visible terminal.
+    p.id === "jdocmunch" && p.installed && p.office === false
+      ? (officeCapable(p.version)
+          ? mi("office", "Add office support (.pdf/.docx/.pptx/.epub)", true, "", "menu-item--accent")
+          : mi("office", "Add office support (.pdf/.docx/.pptx/.epub)", false,
+               "needs jdocmunch-mcp 1.105.0+ — update jDocMunch first"))
+      : "",
     p.update_available
       ? mi("update", `Update to v${p.latest_version}`, LAUNCH_ENABLED, "read-only mode is on — unset JMUNCH_CONSOLE_READ_ONLY to enable", "menu-item--accent")
       : "",
@@ -2577,7 +2599,9 @@ function productMenu(id) {
     ? "not installed"
     : p.broken
     ? "broken install — launcher present but package missing; reinstall"
-    : (p.editable ? "dev checkout" : "installed") + (p.version ? ` · v${p.version}` : "");
+    : (p.editable ? "dev checkout" : "installed")
+      + (p.version ? ` · v${p.version}` : "")
+      + (p.id === "jdocmunch" && p.office === true ? " · office ✓" : "");
   const ov = document.createElement("div");
   ov.className = "overlay";
   ov.innerHTML = `<div class="modal"><h3>${esc(p.name)}</h3>
@@ -2594,6 +2618,7 @@ function productMenu(id) {
         close();
         ({
           license: () => enterLicense(p.id, p.name),
+          office: () => officeFlow(p.name),
           update: () => upgradeFlow(p.id, p.name),
           gitpull: () => gitUpdateFlow(p.id, p.name),
           restart: () => restartFlow(p.id, p.name),
