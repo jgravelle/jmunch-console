@@ -581,14 +581,15 @@ def _meter_window(rng: str) -> tuple[int | None, list[dict], str | None]:
     """(tokens_saved, per-day series, note) for a range, from the meter's daily
     book — or (None, [], note) when the meter can't honestly answer this window.
 
-    The meter only drives a window it FULLY covers: `all` always (the lifetime
-    counter reaches all the way back even though the daily chart doesn't), and a
-    calendar window only when it starts on/after the daily book's first entry.
-    A window the book only partially covers falls back to transcripts — a meter
-    figure missing the window's early days would understate while the chart
-    showed something else, which is the tile/chart disagreement this exists to
-    kill. The note explains the fallback so the smaller figure reads as a data
-    limit, not the truth.
+    The meter drives any window it covers at least partially: `all` always (the
+    lifetime counter reaches all the way back even though the daily chart
+    doesn't), and a calendar window whenever any of its days fall on/after the
+    daily book's first entry. A partially-covered window sums just the covered
+    days, with a note that the figure is a floor. The old behavior — dropping a
+    partially-covered window to the transcript scan — made windows non-monotonic
+    (This Week showed less than Today, because Today rode the meter while the
+    week fell back to transcript figures orders of magnitude smaller). Only a
+    window that ends entirely before meter history falls back to transcripts.
     """
     daily = _meter_daily()
     if rng == "all":
@@ -603,17 +604,24 @@ def _meter_window(rng: str) -> tuple[int | None, list[dict], str | None]:
     if not daily:
         return None, [], None
     since, until = _range_bounds(rng)
-    if since < min(daily):
+    start = min(daily)
+    if until is not None and until <= start:
         return None, [], (
-            f"suite meter history begins {min(daily)}, after this window starts — "
+            f"suite meter history begins {start}, after this window ends — "
             "figures below are the smaller transcript-provable subset"
+        )
+    note = None
+    if since < start:
+        note = (
+            f"suite meter history begins {start} — this window's earlier days "
+            "aren't counted, so the figures are a floor"
         )
     rows = [
         {"date": d, "tokens_saved": daily[d]}
         for d in sorted(daily)
         if d >= since and (until is None or d < until)
     ]
-    return sum(r["tokens_saved"] for r in rows), rows, None
+    return sum(r["tokens_saved"] for r in rows), rows, note
 
 
 def _lifetime_savings() -> int | None:

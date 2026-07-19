@@ -991,7 +991,7 @@ async function renderSavings() {
     b.addEventListener("click", () => {
       if (b.dataset.range === SAVINGS_RANGE) return;
       SAVINGS_RANGE = b.dataset.range;
-      renderSavings(); // re-renders (and restarts the live poll) for the new window
+      reloadSavings(); // re-renders (and restarts the live poll) for the new window
     })
   );
   const modelSel = view.querySelector("#savings-model");
@@ -999,7 +999,7 @@ async function renderSavings() {
     modelSel.addEventListener("change", () => {
       SAVINGS_MODEL = modelSel.value;
       localStorage.setItem("jmunch.savings.model", SAVINGS_MODEL);
-      renderSavings();
+      reloadSavings();
     });
 
   // Live updates: poll the cheap lifetime counter so the All-Time tile climbs in
@@ -1007,6 +1007,22 @@ async function renderSavings() {
   SAVINGS_LAST_TOTAL = s.tokens_saved_total ?? null;
   SAVINGS_RENDERED_AT = Date.now();
   startSavingsPoll();
+}
+
+// In-panel refetch (range chip / pricing model change). Each window is its own
+// receipt scan server-side, so a cold switch can take seconds — show the same
+// spinner + top progress bar that go() shows for page navigation.
+async function reloadSavings() {
+  stopSavingsPoll();
+  view.innerHTML = loadingView("Savings");
+  setBusy(true);
+  try {
+    await renderSavings();
+  } catch (e) {
+    view.innerHTML = `<div class="empty">Couldn't load Savings. ${esc(String(e))}</div>`;
+  } finally {
+    setBusy(false);
+  }
 }
 
 // --- Live savings polling -------------------------------------------------
