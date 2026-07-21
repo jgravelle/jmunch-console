@@ -793,6 +793,23 @@ def config() -> dict:
     return _tag(_fixture("config"), "fixture")
 
 
+def surface_panel() -> dict:
+    """Tool-surface schema receipt from `surface --json` (jcm >= 1.108.154):
+    active surface/profile, visible vs catalog tool counts, schema token
+    weight, tokens avoided by the surface/tier, heaviest tool schemas. The
+    CLI scans nothing (instant), so a short cache is plenty. Older installs
+    fall back to the fixture."""
+    raw = _run_cli(["surface", "--json"])
+    if raw:
+        try:
+            body = json.loads(raw)
+            if isinstance(body, dict) and body.get("visible_tools"):
+                return _tag(body, "live")
+        except ValueError:
+            pass
+    return _tag(_fixture("surface"), "fixture")
+
+
 def _run_cli_json(args: list[str], timeout: int = 20) -> dict:
     """Run a CLI call that emits a JSON object on stdout, capturing it even on a
     non-zero exit (unlike `_run_cli`, which drops stdout when returncode != 0 —
@@ -4402,6 +4419,7 @@ _API = {
     "/api/org": lambda q: org(),
     "/api/repos": lambda q: repos(fresh=(q.get("fresh") or [""])[0] in ("1", "true", "yes")),
     "/api/config": lambda q: config(),
+    "/api/surface": lambda q: _cached("surface", 60.0, surface_panel),
     "/api/sibling-config": lambda q: sibling_config(),
     # Each window is its own transcript scan, so cache per range+model key —
     # switching chips back and forth shouldn't re-pay a scan just waited for.

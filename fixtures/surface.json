@@ -1,0 +1,20 @@
+{
+  "surface": "full",
+  "profile": "full",
+  "visible_tools": 90,
+  "catalog_tools": 93,
+  "schema_tokens_visible": 24143,
+  "schema_tokens_catalog": 24700,
+  "schema_tokens_avoided": 557,
+  "heaviest_tools": {
+    "search_symbols": 1159,
+    "get_blast_radius": 686,
+    "get_symbol_source": 644,
+    "get_parity_map": 550,
+    "get_signal_chains": 501,
+    "get_context_bundle": 497,
+    "index_folder": 468,
+    "get_ranked_context": 442
+  },
+  "estimator": "bytes/4"
+}

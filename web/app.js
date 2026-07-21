@@ -414,8 +414,36 @@ function siblingGroup(sib) {
   return cfgGroup(sib.name, sib.settings.length, rows, { note: sib.note });
 }
 
+// Tool-surface schema receipt card (jcm >= 1.108.154, `surface --json`).
+// Shows what the advertised tool surface itself costs, and what the active
+// surface/tier avoids vs advertising the full catalog — the consequence view
+// beside the tool_surface / tool_profile controls below it.
+function surfaceCard(s) {
+  if (!s || s.error || !s.visible_tools) return "";
+  const heaviest = Object.entries(s.heaviest_tools || {});
+  const max = heaviest.length ? heaviest[0][1] : 1;
+  const bars = heaviest.slice(0, 8).map(([n, w]) =>
+    `<div class="surf-row"><span class="surf-name">${esc(n)}</span>
+       <span class="surf-bar"><span style="width:${Math.max(4, Math.round((w / max) * 100))}%"></span></span>
+       <span class="surf-w">${fullNum(w)}</span></div>`).join("");
+  const surfaceChip = s.surface ? `<span class="chip">surface: ${esc(s.surface)}</span>` : "";
+  return `<div class="card surf-card">
+      <div class="card-head"><span class="name">Tool surface cost</span>${s._source ? sourceBadge(s._source) : ""}</div>
+      <div class="chips">${surfaceChip}<span class="chip">profile: ${esc(s.profile || "full")}</span></div>
+      <div class="kv"><span>visible tools</span><b>${fullNum(s.visible_tools)} of ${fullNum(s.catalog_tools)}</b></div>
+      <div class="kv"><span>schema tokens (visible)</span><b>${fullNum(s.schema_tokens_visible)}</b></div>
+      <div class="kv"><span>schema tokens (catalog)</span><b>${fullNum(s.schema_tokens_catalog)}</b></div>
+      <div class="kv"><span>avoided by this surface</span><b class="surf-avoided">${fullNum(s.schema_tokens_avoided)}</b></div>
+      <div class="surf-list-title">Heaviest tool schemas</div>
+      ${bars}
+      <div class="cfg-note">Estimated at ${esc(s.estimator || "bytes/4")} over the on-wire tool list — the same scale as jCodeMunch's schema-budget guardrail. Narrow the surface with the tool_surface / tool_profile settings below.</div>
+    </div>`;
+}
+
 async function renderConfig() {
-  const [meta, d, sib] = await Promise.all([api("/api/meta"), api("/api/config"), api("/api/sibling-config")]);
+  const [meta, d, sib, surf] = await Promise.all([
+    api("/api/meta"), api("/api/config"), api("/api/sibling-config"), api("/api/surface"),
+  ]);
   const keys = d.keys || [];
 
   // group jcm keys by their config-section, preserving first-appearance order, "Other" last
@@ -442,6 +470,7 @@ async function renderConfig() {
   view.innerHTML =
     head("jCodeMunch-MCP Configuration", sub, d._source) +
     consoleSettingsGroup(meta) +
+    surfaceCard(surf) +
     `<div class="section-title">jCodeMunch-MCP settings · ${keys.length} keys</div>` +
     (groupsHtml || `<div class="empty">No config keys.</div>`) +
     `<div class="section-title">Sibling MCPs · env-configured</div>` +

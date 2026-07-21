@@ -319,7 +319,12 @@ indexed repo; the console doesn't drive them, and you don't need it to.
 
 ### Config
 
-Reached via the **gear** in the top bar. Three groups:
+Reached via the **gear** in the top bar. A **Tool surface cost** card sits
+above the settings (jCodeMunch >= 1.108.154): visible vs catalog tool counts,
+the estimated schema tokens each costs, what the active surface/tier avoids,
+and the heaviest tool schemas — the same bytes/4 receipt `get_session_stats`
+reports, so you can see the consequence of the `tool_surface` / `tool_profile`
+settings right where you change them. Then three groups:
 
 1. **jMunch Console settings**: port, auth token, the jCodeMunch CLI path,
    fixtures mode, the help chat switch, the actions on/off switch, and your team

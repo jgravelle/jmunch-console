@@ -542,3 +542,13 @@ body.busy::after {
 /* ROI-by-unit comparison table: highlight the row matching the selected unit */
 .grid-tbl tr.unit-active td { background: var(--accent-soft, rgba(76, 194, 168, 0.10)); font-weight: var(--fw-medium); }
 .grid-tbl tr.unit-active td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* --- Tool surface cost card (#config, v0.8.84) --- */
+.surf-card { margin-bottom: 14px; }
+.surf-card .surf-avoided { color: var(--accent); }
+.surf-list-title { margin: 10px 0 4px; font-size: var(--fs-sm, 12px); color: var(--text-dim, #8aa); text-transform: uppercase; letter-spacing: .04em; }
+.surf-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+.surf-name { flex: 0 0 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono, monospace); font-size: 12px; }
+.surf-bar { flex: 1 1 auto; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--accent) 12%, transparent); overflow: hidden; }
+.surf-bar > span { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2, var(--accent))); }
+.surf-w { flex: 0 0 52px; text-align: right; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-dim, #8aa); }
