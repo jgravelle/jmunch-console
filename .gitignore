@@ -8,3 +8,9 @@ data/
 
 # Internal design/roadmap doc — kept local, not published
 PRD.md
+
+# Internal PRDs / roadmap triage — this repo is PUBLIC, and the standing rule is
+# no SKU or strategy content in any tracked file. Ignored as a whole so a new
+# internal doc is private by default rather than by remembering. If a genuinely
+# public doc belongs here, negate it explicitly (e.g. !docs/CONTRIBUTING-UI.md).
+docs/
