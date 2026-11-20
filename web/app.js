@@ -609,6 +609,7 @@ async function indexNew() {
   if (target === null) return; // cancelled
   const t = target.trim();
   if (!t) return;
+  const res = await postIndexAction("/api/index-repo", { target: t }, "index_started", `indexing ${t}`);
   if (res.status !== "index_started") return;
   // Indexing runs in its own terminal (kept open with its result). The repos list
   // is cached (30s) AND list-repos is slow, so a plain refresh would serve stale
