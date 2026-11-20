@@ -2025,7 +2025,7 @@ def index_new(target: str) -> dict:
     ever reaches the spawned argv: a GitHub `owner/repo` must match a strict slug
     (no separators or shell metacharacters), and a local target must resolve to an
     existing directory whose path carries no cmd/shell metacharacters. Spawns with
-    hold_on_error so a bad target leaves its error on screen. ALLOW_LAUNCH-gated;
+    hold_on_done (which implies hold_on_error) so the result stays on screen. ALLOW_LAUNCH-gated;
     jcm's own JCODEMUNCH_TRUSTED_FOLDERS guard still applies at index time.
     """
     if not ALLOW_LAUNCH:
@@ -2669,7 +2669,10 @@ def set_license(product_id: str, key: str) -> dict:
 # holds any valid suite license. The key is resolved server-side and handed to
 # install-pack — the client never names it.
 
-STARTER_PACK_API = "https://j.gravelle.us/jCodeMunch/starter-packs-system/api/index.php"
+# jcm moved the pack pipeline to jcodemunch.com in 1.108.203; the legacy
+# j.gravelle.us copy is no longer refreshed and serves a frozen "1.0.0" catalog,
+# which made every installed pack read "update available" forever (issue #2).
+STARTER_PACK_API = "https://jcodemunch.com/starter-packs-system/api/index.php"
 
 
 def _index_dir() -> Path:
@@ -2699,7 +2702,10 @@ def _pack_license() -> dict:
 def _fetch_pack_catalog() -> list[dict]:
     """Fetch the public pack catalog. [] on any failure (offline-safe)."""
     try:
-        with urllib.request.urlopen(f"{STARTER_PACK_API}?action=catalog", timeout=10) as r:
+        req = urllib.request.Request(
+            f"{STARTER_PACK_API}?action=catalog", headers={"User-Agent": "jmunch-console"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read().decode("utf-8", "replace"))
         packs = data.get("packs")
         return packs if isinstance(packs, list) else []
@@ -2798,7 +2804,7 @@ def install_pack(pack_id: str, force: bool = False) -> dict:
         return {
             "error": f"this pack needs a jCodeMunch license to {verb}",
             "hint": "enter a valid license key on any suite product to unlock the full pack library",
-            "get_license": "https://j.gravelle.us/jCodeMunch/#pricing",
+            "get_license": "https://jcodemunch.com/#pricing",
             "_status": 403,
         }
     exe = shutil.which(MCP_BIN)
